@@ -25,13 +25,13 @@
     <h1>Kings Cup</h1>
     <div id="player-input">
         <input type="text" id="player-name" placeholder="Enter player name">
-        <button onclick="addPlayer()">Add Player</button>
+        <button id="add-player-btn">Add Player</button>
     </div>
     <div id="player-reset">
-        <button onclick="resetGameState()">Reset</button>
+        <button id="reset-btn">Reset</button>
     </div>
-    <button id="start-btn" onclick="startGame()" disabled>Start Game</button>
+    <button id="start-btn" disabled>Start Game</button>
     <canvas id="gameCanvas"></canvas>
-    <script src="static/main.js"></script>
+    <script type="module" src="static/main.js"></script>
 </body>
 </html>
