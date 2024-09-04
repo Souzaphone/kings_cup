@@ -16,7 +16,7 @@ class Card:
 class Deck:
     def __init__(self):
         suits = ["Hearts", "Diamonds", "Clubs", "Spades"]
-        values = ["2", "3", "4", "5", "6", "7", "8", "9", "10", "Jack", "Queen", "King", "Ace"]
+        values = ["2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "1"]
         self.cards = [Card(suit, value) for suit in suits for value in values]
         random.shuffle(self.cards)
 
@@ -54,9 +54,6 @@ def reset_game():
     global deck, players
     deck = Deck()
     players = []
-
-    logging.info(deck.cards)
-    logging.info(players)
 
     return jsonify({"success": True})
 
