@@ -1,5 +1,5 @@
 /// main.js
-import { getDeck, cardEvents } from './cards.js';
+import { cardEvents } from './cards.js';
 import { gaussianRandom } from './utilities.js';
 
 // TODO: implement events for each individual card
@@ -21,8 +21,12 @@ let hoveredCardIndex = null; // To keep track of which card is being hovered
 let pulseOpacity = 0;
 let pulseDirection = 1;
 let enlargedCard = null;
-let targetAmount = Math.max(gaussianRandom(20, 6, 5)); // Picks a random number of cards that the can will burst at
+let targetAmount = 5; // Picks a random number of cards that the can will burst at
 let turn = 0;
+let gameId = null;
+let socket;
+let client = null;
+let clicked = false;
 
 // Initialize the game
 async function init() {
@@ -39,72 +43,152 @@ async function init() {
         console.error('Failed to load image at ' + canImage.src);
     };
 
-    console.log(`random amount is: ${targetAmount}`);
-
     canvas.addEventListener('click', handleCanvasClick);
     canvas.addEventListener('mousemove', handleMouseMove);
     updateStartButtonState();
 
     await resetGameState();
 
-
-    document.getElementById('start-btn').addEventListener('click', startGame);
-    document.getElementById('add-player-btn').addEventListener('click', addPlayer);
+    document.getElementById('start-game-btn').addEventListener('click', handleStartGame);
+    document.getElementById('create-game-btn').addEventListener('click', createGame);
+    document.getElementById('join-game-btn').addEventListener('click', handleJoinGameClick);
     document.getElementById('reset-btn').addEventListener('click', resetGameState);
+    document.getElementById('copy-game-id-btn').addEventListener('click', copyGameId);
+    document.getElementById('player-name').addEventListener('input', updateJoinButtonState);
+    document.getElementById('game-id').addEventListener('input', updateJoinButtonState);
+
+    socket = io();
+
+    socket.on('player_joined', handlePlayerJoined);
+    socket.on('game_started', handleGameStarted);
+    socket.on('card_drawn', handleCardDrawn);
+    socket.on('game_over', handleGameOver);
+    socket.on('card_clicked', handleCardClick);
 
     animatePulse();
-
     requestAnimationFrame(animatePulse);
 }
 
+function createGame() {
+    client = document.getElementById('player-name').value;
+    if (client) {
+        fetch('/create_game', { method: 'POST' })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    gameId = data.game_id;
+                    targetAmount = data.target_amount
+                    console.log(`random amount is: ${targetAmount}`);
+                    joinGame();
+                }
+            });
+    }
+}
+
+function joinGame() {
+    console.log(`Joining game with ID: ${gameId}`);
+    
+    if (gameId && client) {
+        fetch('/join_game', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({game_id: gameId, player_name: client})
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                socket.emit('join', {game_id: gameId, player_name: client});
+                updateGameState(data.game);
+            }
+        });
+    } else {
+        alert('Please enter your player name.');
+    }
+}
+
+function updateGameState(game) {
+    players = game.players;
+    targetAmount = game.target_amount;
+    drawTable();
+}
+
+function handleJoinGameClick() {
+    gameId = document.getElementById('game-id').value;
+    client = document.getElementById('player-name').value;
+    if (gameId) {
+        joinGame();
+    } else {
+        alert('Please enter a Game ID.');
+    }
+}
+
+function handlePlayerJoined(data) {
+    players = data.players;
+    updateStartButtonState();
+    drawTable();
+}
+
+function handleStartGame() {
+    socket.emit('start_game', {game_id: gameId, player_name: document.getElementById('player-name').value.trim()});
+}
+
+async function handleGameStarted(gameState) {
+    // updateGameState(gameState);
+    await initializeDeck();
+    dealt = true;
+    drawTable();
+}
+
+function updateJoinButtonState() {
+    const playerName = document.getElementById('player-name').value.trim();
+    const inputGameId = document.getElementById('game-id').value.trim();
+    const joinButton = document.getElementById('join-game-btn');
+    joinButton.disabled = !inputGameId && !playerName;
+}
+
 function updateStartButtonState() {
-    const startButton = document.getElementById('start-btn');
+    const startButton = document.getElementById('start-game-btn');
 
     console.log(players.length < 2);
 
     startButton.disabled = players.length < 2; // Enable button only if there are at least 2 players
 }
 
-async function startGame() {
-    if (players.length >= 2) {
-        const angleStep = (2 * Math.PI) / 52;
-        const radius = 150;
+async function initializeDeck() {
 
-        const data = await getDeck();
+    console.log(`inside initialize deck game id: ${gameId}`);
 
-        if (data && data.success) {
-            cards = await Promise.all(data.deck.map(async (card, i) => {
-                const img = new Image();
-                const suit = card.suit.toLowerCase().charAt(0);
-                const value = card.value.toString().padStart(2, '0');
-                img.src = `static/assets/${suit}${value}.png`;
-                await new Promise((resolve) => {
-                    img.onload = resolve;
-                    img.onerror = () => {
-                        console.error(`Failed to load image: ${img.src}`);
-                        resolve();
-                    };
-                });
-                return {
-                    id: i,
-                    x: canvas.width / 2 + Math.cos(i * angleStep) * radius,
-                    y: canvas.height / 2 + Math.sin(i * angleStep) * radius,
-                    angle: angleStep,
-                    revealed: false,
-                    value: card.value,
-                    suit: card.suit,
-                    size: 1,
-                    zIndex: i,
-                    image: img
-                };
-            }));
-            dealt = true;
-            console.log(cards);
-            drawTable();
-        } else {
-            console.error('Failed to initialize deck');
-        }
+    const response = await fetch('/return_deck', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({game_id: gameId})
+    });
+    const data = await response.json();
+
+    if (data.success) {
+        cards = data.deck.map((card, i) => {
+            const img = new Image();
+            img.src = `data:image/png;base64,${card.image_data}`;
+            return {
+                id: i,
+                x: canvas.width / 2 + Math.cos(i * (2 * Math.PI / 52)) * 150,
+                y: canvas.height / 2 + Math.sin(i * (2 * Math.PI / 52)) * 150,
+                angle: i * (2 * Math.PI / 52),
+                revealed: false,
+                value: card.value,
+                suit: card.suit,
+                size: 1,
+                zIndex: i,
+                image: img
+            };
+        });
+        dealt = true;
+        console.log(cards);
+        drawTable();
+    } else {
+        console.error('Failed to initialize deck');
     }
+
 }
 
 function drawTable() {
@@ -113,7 +197,9 @@ function drawTable() {
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
     // Draw can
-    ctx.drawImage(canImage, canvas.width / 2 - canRadius, canvas.height / 2 - canRadius, canRadius * 2, canRadius * 2);
+    if (canImage.complete) {
+        ctx.drawImage(canImage, canvas.width / 2 - canRadius, canvas.height / 2 - canRadius, canRadius * 2, canRadius * 2);
+    }
 
     // Draw cards
     cards.sort((a, b) => a.zIndex - b.zIndex);
@@ -125,7 +211,7 @@ function drawTable() {
         ctx.translate(card.x, card.y);
         // ctx.rotate(card.angle);
         
-        if (card.revealed) {
+        if (card.revealed && card.image.complete) {
             ctx.drawImage(card.image, -cardWidth / 2, -cardHeight / 2, cardWidth, cardHeight);
         } else {
             // Draw card back
@@ -149,9 +235,21 @@ function drawTable() {
     ctx.font = '20px Arial';
     ctx.fillText(`Current Player: ${players[currentPlayerIndex] || 'Waiting for players...'}`, 20, 30);
 
+    const copyBtn = document.getElementById('copy-game-id-btn');
+    const copyStatus = document.getElementById('copy-status');
+    
+    // Set positions relative to the canvas or other UI elements if necessary
+    copyBtn.style.position = 'absolute';
+    copyBtn.style.top = `${canvas.offsetTop + 80}px`; // Adjust to desired position
+    copyBtn.style.left = `${canvas.offsetLeft + 20}px`;
+
+    copyStatus.style.position = 'absolute';
+    copyStatus.style.top = `${canvas.offsetTop + 110}px`; // Adjust to desired position
+    copyStatus.style.left = `${canvas.offsetLeft + 20}px`;
+
     // Draw player board
     const boardWidth = 200;
-    const boardHeight = 100;
+    const boardHeight = 300;
     const boardX = canvas.width - boardWidth - 20;
     const boardY = 20;
 
@@ -172,10 +270,12 @@ function drawTable() {
     });
 }
 
+
+// need to have a universal player data storage, either in python or js
 // Performs action of game when clicking on a card
 // TODO: Need to fix this and get actual good hitbox detection
 function handleCanvasClick(event) {
-    if (busy || !dealt) {
+    if (busy || !dealt || players[currentPlayerIndex] !== client) {
         return;
     }
 
@@ -197,12 +297,27 @@ function handleCanvasClick(event) {
             
             if (!card.revealed) {
                 busy = true;
-                card.zIndex = nextZIndex++;
-                animateCard(card.id);
+                socket.emit('draw_card', {game_id: gameId, player_name: client, card: card.id});
             }
             return; 
         }
     }
+}
+
+function handleCardDrawn(data) {
+    const card = cards.find(c => c.id === data.card);
+    if (card) {
+        busy = true;
+        card.revealed = true;
+        card.zIndex = nextZIndex++;
+        animateCard(card.id);
+        drawTable();
+    }
+}
+
+function handleGameOver(data) {
+    alert(data.message);
+    resetGameState();
 }
 
 function animateCard(cardId) {
@@ -262,7 +377,6 @@ function animateCard(cardId) {
             }
             addKeyListenerToShrinkCard();
             animatingCard = null;
-            busy = false;
         }
     }
 
@@ -275,16 +389,52 @@ function addKeyListenerToShrinkCard() {
     document.addEventListener('click', shrinkCard, { once: true });
 }
 
-function shrinkCard(event) {
-
-    if (enlargedCard) {
+// this is for every user except the one who clicked the card
+function handleCardClick(data) {
+    if (!clicked) {
+    
         enlargedCard.size = 1; // Reset to original size
-        currentPlayerIndex = (currentPlayerIndex + 1) % players.length; 
+
+
+        // TODO: need to take a look at this and figure it out
+
+        console.log(`Turn: ${turn}, Target: ${targetAmount} inside of handleclick`);
 
         turn++;
         if (turn === targetAmount) {
             openCan();
         }
+
+        currentPlayerIndex = (currentPlayerIndex + 1) % players.length; 
+
+        drawTable();
+        enlargedCard = null;
+
+
+        document.removeEventListener('keydown', shrinkCard);
+        document.removeEventListener('click', shrinkCard);
+    }
+    clicked = false;
+    busy = false;
+}
+
+// this is for the user that clicked the card
+function shrinkCard(event) {
+
+    if (enlargedCard && players[currentPlayerIndex] === client) {
+        clicked = true
+        socket.emit('card_click', {game_id: gameId, player_name: client}); // need to make sure this gets to every player
+        enlargedCard.size = 1; // Reset to original size
+
+        turn++;
+
+        console.log(`Turn: ${turn}, Target: ${targetAmount}`);
+
+        if (turn === targetAmount) {
+            openCan();
+        }
+
+        currentPlayerIndex = (currentPlayerIndex + 1) % players.length; 
 
         drawTable();
         enlargedCard = null;
@@ -322,8 +472,7 @@ function openCan(){
 
     // Reset the game state
     turn = 0;
-    targetAmount = Math.max(gaussianRandom(20, 6, 5));
-    console.log(`random amount is: ${targetAmount}`);
+
 }
 
 
@@ -382,23 +531,16 @@ function animatePulse() {
     requestAnimationFrame(animatePulse);
 }
 
-function addPlayer() {
-    const playerName = document.getElementById('player-name').value;
-    if (playerName && !players.includes(playerName)) {
-        fetch('/add_player', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({name: playerName})
-        })
-        .then(response => response.json())
-        .then(data => {
-            if (data.success) {
-                players = data.players;
-                updateStartButtonState();   
-                drawTable();   
-            } else {
-                alert(data.message);
-            }
+// Copy game ID to clipboard
+function copyGameId() {
+    if (gameId) {
+        navigator.clipboard.writeText(gameId).then(() => {
+            // Show feedback message
+            const copyStatus = document.getElementById('copy-status');
+            copyStatus.style.display = 'block';
+            setTimeout(() => copyStatus.style.display = 'none', 2000); // Hide after 2 seconds
+        }).catch(err => {
+            console.error('Failed to copy game ID:', err);
         });
     }
 }
@@ -407,7 +549,12 @@ function addPlayer() {
 async function resetGameState() {
     try {
         // Clear server-side state
-        const response = await fetch('/reset_game', { method: 'POST' });
+        const response = await fetch('/reset_game', { 
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ game_id: gameId })
+        });
+
         const data = await response.json();
 
         if (data.success) {
@@ -416,6 +563,7 @@ async function resetGameState() {
             players = [];
             currentPlayerIndex = 0;
             dealt = false;
+            gameId = null;
             updateStartButtonState();
 
             ctx.clearRect(0, 0, canvas.width, canvas.height);

@@ -20,17 +20,23 @@
             margin-top: 20px;
         }
     </style>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
 </head>
 <body>
     <h1>Kings Cup</h1>
-    <div id="player-input">
+
+    <div id="game-controls">
         <input type="text" id="player-name" placeholder="Enter player name">
-        <button id="add-player-btn">Add Player</button>
-    </div>
-    <div id="player-reset">
+        <button id="create-game-btn">Create Game</button>
+        <input type="text" id="game-id" placeholder="Enter game ID">
+        <button id="join-game-btn" disabled>Join Game</button>
+        <button id="start-game-btn" disabled>Start Game</button>
         <button id="reset-btn">Reset</button>
     </div>
-    <button id="start-btn" disabled>Start Game</button>
+
+    <button id="copy-game-id-btn">Copy Game ID</button>
+    <p id="copy-status" style="display: none;">Game ID copied!</p>
+
     <canvas id="gameCanvas"></canvas>
     <script type="module" src="static/main.js"></script>
 </body>
