@@ -1,10 +1,8 @@
 /// main.js
 import { cardEvents } from './cards.js';
-import { gaussianRandom } from './utilities.js';
 
 // TODO: implement events for each individual card
 // have it so only cards that when a card is being animated it is not flashing
-
 let canvas, ctx;
 let cards = [];
 let currentPlayerIndex = 0;
@@ -27,13 +25,41 @@ let gameId = null;
 let socket;
 let client = null;
 let clicked = false;
+let gameState = null;
+
 
 // Initialize the game
-async function init() {
+async function init_index() {
+
+
+    socket = io();
+
+    socket.on('connect_error', (error) => {
+        console.error('Socket.IO connection error:', error);
+    });
+
+    socket.on('connect', () => {
+        console.log('Socket.IO connected');
+    });
+
+    document.getElementById('create-game-btn').addEventListener('click', createGame);
+    document.getElementById('join-game-btn').addEventListener('click', handleJoinGameClick);
+
+    document.getElementById('player-name').addEventListener('input', updateJoinButtonState);
+    document.getElementById('game-id').addEventListener('input', updateJoinButtonState);
+}
+
+async function init_game() {
     canvas = document.getElementById('gameCanvas');
-    ctx = canvas.getContext('2d');
-    canvas.width = window.innerWidth * 0.8;
-    canvas.height = window.innerHeight * 0.8;
+    if (canvas) {
+        ctx = canvas.getContext('2d');
+        canvas.width = window.innerWidth * 0.8;
+        canvas.height = window.innerHeight * 0.8;
+    } else {
+        console.error('Canvas element not found');
+        return; // Exit the function if canvas is not found
+    }
+
     
     canImage = new Image();
     canImage.src = 'static/assets/can.png'; 
@@ -47,26 +73,60 @@ async function init() {
     canvas.addEventListener('mousemove', handleMouseMove);
     updateStartButtonState();
 
-    await resetGameState();
+    // await resetGameState();
 
     document.getElementById('start-game-btn').addEventListener('click', handleStartGame);
-    document.getElementById('create-game-btn').addEventListener('click', createGame);
-    document.getElementById('join-game-btn').addEventListener('click', handleJoinGameClick);
     document.getElementById('reset-btn').addEventListener('click', resetGameState);
     document.getElementById('copy-game-id-btn').addEventListener('click', copyGameId);
-    document.getElementById('player-name').addEventListener('input', updateJoinButtonState);
-    document.getElementById('game-id').addEventListener('input', updateJoinButtonState);
+    document.getElementById('leave-btn').addEventListener('click', leaveGame);
+
+    if (gameState) {
+        updateGameState(gameState);
+    } else {
+        get_game_state()
+    }
+
+    gameId = sessionStorage.getItem('gameId');
+    client = sessionStorage.getItem('client');
 
     socket = io();
+
+    socket.on('connect', () => {
+        console.log('Socket.IO connected');
+        socket.emit('join', {game_id: gameId, player_name: client});
+    });
+
+    socket.on('connect_error', (error) => {
+        console.error('Socket.IO connection error:', error);
+    });
 
     socket.on('player_joined', handlePlayerJoined);
     socket.on('game_started', handleGameStarted);
     socket.on('card_drawn', handleCardDrawn);
     socket.on('game_over', handleGameOver);
     socket.on('card_clicked', handleCardClick);
+    socket.on('player_left', handlePlayerLeft);
+    socket.on('game_reset', handleReset);
 
     animatePulse();
     requestAnimationFrame(animatePulse);
+}
+
+function get_game_state() {
+
+    console.log(`Game id in get_game_state ${gameId}`);
+
+    fetch('/get_game_state', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({game_id: gameId, player_name: client})
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            updateGameState(data.game);
+        }
+    });
 }
 
 function createGame() {
@@ -77,11 +137,29 @@ function createGame() {
             .then(data => {
                 if (data.success) {
                     gameId = data.game_id;
+                    console.log(`Game ID: ${gameId}`)
                     targetAmount = data.target_amount
                     console.log(`random amount is: ${targetAmount}`);
                     joinGame();
                 }
             });
+    }
+}
+
+function leaveGame() {
+    if (gameId && client) {
+        fetch('/leave_game', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({game_id: gameId, player_name: client})
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                socket.emit('leave', {game_id: gameId, player_name: client});
+                window.location.href = '/';
+            }
+        });
     }
 }
 
@@ -97,8 +175,18 @@ function joinGame() {
         .then(response => response.json())
         .then(data => {
             if (data.success) {
+
+                console.log(`gameId: ${gameId}, client: ${client}`);
+                gameState = data.game;
+
+                console.log(gameState);
+
+                sessionStorage.setItem('gameId', gameId);
+                sessionStorage.setItem('client', client);
+
+                window.location.href = `/game`;
+
                 socket.emit('join', {game_id: gameId, player_name: client});
-                updateGameState(data.game);
             }
         });
     } else {
@@ -108,6 +196,9 @@ function joinGame() {
 
 function updateGameState(game) {
     players = game.players;
+
+    console.log(`players: ${players}`);
+
     targetAmount = game.target_amount;
     drawTable();
 }
@@ -122,14 +213,23 @@ function handleJoinGameClick() {
     }
 }
 
+function handlePlayerLeft(data) {
+    players = data.players;
+    updateStartButtonState;
+    drawTable();
+}
+
 function handlePlayerJoined(data) {
+
+    console.log(`Inside of handlePlayerJoined`);
+
     players = data.players;
     updateStartButtonState();
     drawTable();
 }
 
 function handleStartGame() {
-    socket.emit('start_game', {game_id: gameId, player_name: document.getElementById('player-name').value.trim()});
+    socket.emit('start_game', {game_id: gameId, player_name: client});
 }
 
 async function handleGameStarted(gameState) {
@@ -192,6 +292,12 @@ async function initializeDeck() {
 }
 
 function drawTable() {
+
+    if (!ctx) {
+        console.error('Canvas context is not initialized');
+        return; // Exit the function if ctx is not initialized
+    }
+
     // Draw table
     ctx.fillStyle = '#008000';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
@@ -395,9 +501,6 @@ function handleCardClick(data) {
     
         enlargedCard.size = 1; // Reset to original size
 
-
-        // TODO: need to take a look at this and figure it out
-
         console.log(`Turn: ${turn}, Target: ${targetAmount} inside of handleclick`);
 
         turn++;
@@ -409,7 +512,6 @@ function handleCardClick(data) {
 
         drawTable();
         enlargedCard = null;
-
 
         document.removeEventListener('keydown', shrinkCard);
         document.removeEventListener('click', shrinkCard);
@@ -533,7 +635,11 @@ function animatePulse() {
 
 // Copy game ID to clipboard
 function copyGameId() {
+
+    console.log(`inside of copy. Game ID ${gameId}`);
+
     if (gameId) {
+        console.log(`gameid exists`);
         navigator.clipboard.writeText(gameId).then(() => {
             // Show feedback message
             const copyStatus = document.getElementById('copy-status');
@@ -545,8 +651,22 @@ function copyGameId() {
     }
 }
 
+function handleReset(data) {
+    // Clear local state
+    cards = [];
+    currentPlayerIndex = 0;
+    dealt = false;
+    updateStartButtonState();
+
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    drawTable(); 
+}
+
 // there is probably an error in here
 async function resetGameState() {
+
+    console.log(`inside reset`);
+
     try {
         // Clear server-side state
         const response = await fetch('/reset_game', { 
@@ -558,17 +678,9 @@ async function resetGameState() {
         const data = await response.json();
 
         if (data.success) {
-            // Clear local state
-            cards = [];
-            players = [];
-            currentPlayerIndex = 0;
-            dealt = false;
-            gameId = null;
-            updateStartButtonState();
 
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-            drawTable(); 
-
+            console.log(`data in reset ${data}`);
+            socket.emit('reset', {game_id: gameId});
         } else {
             console.error('Failed to reset game state:', data.message);
         }
@@ -578,4 +690,13 @@ async function resetGameState() {
 }
 
 // Initialize the game when the page loads
-window.onload = init;
+if (window.location.pathname === '/') {
+    window.onload = init_index;
+}
+
+if (window.location.pathname === '/game') {
+    gameId = sessionStorage.getItem('gameId');
+    client = sessionStorage.getItem('client');
+    window.onload = init_game;
+    console.log(`type of ctx:  ${typeof ctx}`);
+}

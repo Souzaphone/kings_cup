@@ -2,10 +2,7 @@
 from flask import Flask, jsonify, request, render_template
 from flask_socketio import SocketIO, emit, join_room, leave_room
 import uuid
-import random
 import logging
-import base64
-import os
 from classes import Game
 
 logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -16,9 +13,14 @@ socketio = SocketIO(app, cors_allowed_origins="*")
 games = {}
 
 @app.route('/')
-def index():
+def show_index():
     logging.debug("Index route accessed")
     return render_template('index.html')
+
+@app.route('/game')
+def show_game():
+    logging.debug("Game route accessed")
+    return render_template('game.html')
 
 @app.route('/create_game', methods=['POST'])
 def create_game():
@@ -58,14 +60,48 @@ def join_game():
         logging.error(f"Game {game_id} not found for player {player_name}")
         return jsonify({"success": False, "message": "Game not found"})
     
+@app.route('/leave_game', methods=['POST'])
+def leave_game():
+    data = request.json
+    game_id = data.get('game_id')
+    player_name = data.get('player_name')
+
+    if game_id in games:
+        game = games[game_id]
+        if game.remove_player(player_name):
+
+            logging.info(f"Player {player_name} left game {game_id}")
+
+            if game.is_players_empty():
+                del games[game_id]
+                logging.info(f"Game {game_id} removed")
+            return jsonify({"success": True})
+        else:
+            return jsonify({"success": False, "message": "Player not found"})
+    else:
+        logging.error(f"Game {game_id} not found for player {player_name}")
+        return jsonify({"success": False, "message": "Game not found"})
+
+@socketio.on('leave')
+def on_leave(data):
+    game_id = data['game_id']
+    player_name = data['player_name']
+    leave_room(game_id)
+    if game_id in games:
+        game = games[game_id]
+        logging.info(f"Player {player_name} left room for game {game_id}")
+        emit('player_left', {"players": game.players}, room=game_id)
+    else:
+        emit('player_left', {"players": []}, room=game_id)
 
 @socketio.on('join')
 def on_join(data):
+    logging.info("Join event received")
     game_id = data['game_id']
     player_name = data['player_name']
     join_room(game_id)
     game = games[game_id]
-    logging.info(f"Player {player_name} joined room for game {game_id}")
+    logging.info(f"Player {player_name} joined room for game {game_id} with players {game.players}")
     emit('player_joined', {"players": game.players}, room=game_id)
 
 @socketio.on('card_click')
@@ -121,14 +157,39 @@ def return_deck():
     else:
         logging.error(f"Game {game_id} not found for deck return")
         return jsonify({"success": False, "message": "Game not found"})
+    
+@socketio.on('connect')
+def handle_connect():
+    print('Client connected')
 
 @app.route('/reset_game', methods=['POST'])
 def reset_game():
     game_id = request.json['game_id']
     if game_id in games:
+        players = games[game_id].players
         del games[game_id]
+        game = Game(game_id) # resets the game
+        game.players = players
+        games[game_id] = game
         logging.info(f"Game {game_id} reset")
     return jsonify({"success": True})
+
+@socketio.on('reset')
+def on_reset(data):
+
+    logging.debug("Reset event received")
+
+    gameId = data['game_id']
+    emit('game_reset', room=gameId)
+
+@app.route('/get_game_state', methods=['POST'])
+def get_game_state():
+    game_id = request.json['game_id']
+    logging.info(f"Game state requested for game {game_id}")
+    if game_id in games:
+        game = games[game_id]
+        return jsonify({"success": True, "game": game.to_dict()})
+    
 
 if __name__ == '__main__':
     logging.info("Starting Flask and SocketIO server")

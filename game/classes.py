@@ -3,6 +3,7 @@ import random
 import base64
 import os
 import logging
+from utilities import generate_random_integer
 
 logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
 
@@ -54,16 +55,23 @@ class Game:
         self.started = False
         self.current_player_index = 0
         self.cards_on_table = []
-        self.target_amount = random.randint(5, 21)
+        self.target_amount = generate_random_integer()
         self.turn = 0
         logging.info(f"Game created with ID: {self.id}")
 
     def add_player(self, player_name):
         if len(self.players) < 20 and player_name not in self.players:
             self.players.append(player_name)
-            logging.info(f"Player {player_name} added to game {self.id}")
             return True
         logging.warning(f"Failed to add player {player_name} to game {self.id}")
+        return False
+    
+    def remove_player(self, player_name):
+        if player_name in self.players:
+            self.players.remove(player_name)
+            logging.info(f"Player {player_name} removed from game {self.id}")
+            return True
+        logging.warning(f"Player {player_name} not found in game {self.id}")
         return False
 
     def start_game(self):
@@ -73,6 +81,9 @@ class Game:
             return True
         logging.warning(f"Cannot start game {self.id}, not enough players")
         return False
+    
+    def is_players_empty(self):
+        return len(self.players) == 0
 
     def draw_card(self):
         card = self.deck.draw()
