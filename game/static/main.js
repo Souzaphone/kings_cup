@@ -1,9 +1,11 @@
 /// main.js
 import { cardEvents } from './cards.js';
+import { lerp, easeInOutCubic } from './utilities.js';
 
 // TODO: implement events for each individual card
 // have it so only cards that when a card is being animated it is not flashing
 let canvas, ctx;
+let cursorCanvas, cursorCtx;
 let cards = [];
 let currentPlayerIndex = 0;
 let players = [];
@@ -11,6 +13,7 @@ let canRadius = 30;
 let cardWidth = 50;
 let cardHeight = 75;
 let canImage;
+let cursorImage;
 let animatingCard = null;
 let dealt = false;
 let busy = false;
@@ -26,12 +29,19 @@ let socket;
 let client = null;
 let clicked = false;
 let gameState = null;
+let imagesLoaded = 0;
+let totalImages = 1;
+let playerCursors = {};
+let lastSentTime = 0;
+const THROTTLE_INTERVAL = 50;
+const UPDATE_INTERVAL = 100;
+const NORMALIZED_WIDTH = 1000;
+const NORMALIZED_HEIGHT = 1000;
+const ANIMATION_DURATION = 200;
 
 
 // Initialize the game
 async function init_index() {
-
-
     socket = io();
 
     socket.on('connect_error', (error) => {
@@ -44,7 +54,6 @@ async function init_index() {
 
     document.getElementById('create-game-btn').addEventListener('click', createGame);
     document.getElementById('join-game-btn').addEventListener('click', handleJoinGameClick);
-
     document.getElementById('player-name').addEventListener('input', updateJoinButtonState);
     document.getElementById('game-id').addEventListener('input', updateJoinButtonState);
 }
@@ -53,17 +62,22 @@ async function init_game() {
     canvas = document.getElementById('gameCanvas');
     if (canvas) {
         ctx = canvas.getContext('2d');
-        canvas.width = window.innerWidth * 0.8;
-        canvas.height = window.innerHeight * 0.8;
     } else {
         console.error('Canvas element not found');
         return; // Exit the function if canvas is not found
     }
 
-    
+    setupCursorCanvas();
+    resizeCanvas();
+
     canImage = new Image();
     canImage.src = 'static/assets/can.png'; 
-    canImage.onload = drawTable;
+    cursorImage = new Image();
+    cursorImage.src = 'static/assets/opponent.png';
+    canImage.onload = function() {
+        imagesLoaded++;
+        checkAllImagesLoaded();
+    };
 
     canImage.onerror = function() {
         console.error('Failed to load image at ' + canImage.src);
@@ -73,12 +87,18 @@ async function init_game() {
     canvas.addEventListener('mousemove', handleMouseMove);
     updateStartButtonState();
 
+    window.addEventListener('load', resizeCanvas);
+    window.addEventListener('resize', resizeCanvas);
+    window.addEventListener('beforeunload', handleLeavePage);
     // await resetGameState();
 
     document.getElementById('start-game-btn').addEventListener('click', handleStartGame);
     document.getElementById('reset-btn').addEventListener('click', resetGameState);
     document.getElementById('copy-game-id-btn').addEventListener('click', copyGameId);
-    document.getElementById('leave-btn').addEventListener('click', leaveGame);
+    document.getElementById('leave-btn').addEventListener('click', () => {
+        isLeavingIntentionally = true;
+        leaveGame();
+    });
 
     if (gameState) {
         updateGameState(gameState);
@@ -107,9 +127,36 @@ async function init_game() {
     socket.on('card_clicked', handleCardClick);
     socket.on('player_left', handlePlayerLeft);
     socket.on('game_reset', handleReset);
+    socket.on('cursor_update', handleCursors);
 
     animatePulse();
     requestAnimationFrame(animatePulse);
+    requestAnimationFrame(gameLoop);
+    requestAnimationFrame(drawPlayers);
+}
+
+function setupCursorCanvas() {
+    cursorCanvas = document.createElement('canvas');
+    cursorCanvas.width = canvas.width;
+    cursorCanvas.height = canvas.height;
+    cursorCanvas.style.position = 'absolute';
+    cursorCanvas.style.left = canvas.offsetLeft + 'px';
+    cursorCanvas.style.top = canvas.offsetTop + 'px';
+    cursorCanvas.style.pointerEvents = 'none'; // Allow clicks to pass through
+    document.body.appendChild(cursorCanvas);
+    cursorCtx = cursorCanvas.getContext('2d');
+}
+
+function gameLoop() {
+    updatePlayerPositions();
+    drawPlayers();
+    requestAnimationFrame(gameLoop);
+}
+
+function checkAllImagesLoaded() {
+    if (imagesLoaded === totalImages) {
+        drawTable();
+    }
 }
 
 function get_game_state() {
@@ -147,6 +194,7 @@ function createGame() {
 }
 
 function leaveGame() {
+    isLeavingIntentionally = true;
     if (gameId && client) {
         fetch('/leave_game', {
             method: 'POST',
@@ -243,7 +291,9 @@ function updateJoinButtonState() {
     const playerName = document.getElementById('player-name').value.trim();
     const inputGameId = document.getElementById('game-id').value.trim();
     const joinButton = document.getElementById('join-game-btn');
-    joinButton.disabled = !inputGameId && !playerName;
+    const createGameButton = document.getElementById('create-game-btn');
+    createGameButton.disabled = !playerName;
+    joinButton.disabled = !(inputGameId && playerName);
 }
 
 function updateStartButtonState() {
@@ -266,9 +316,14 @@ async function initializeDeck() {
     const data = await response.json();
 
     if (data.success) {
+        totalImages += data.deck.length;
         cards = data.deck.map((card, i) => {
             const img = new Image();
             img.src = `data:image/png;base64,${card.image_data}`;
+            img.onload = function() {
+                imagesLoaded++;
+                checkAllImagesLoaded();
+            };
             return {
                 id: i,
                 x: canvas.width / 2 + Math.cos(i * (2 * Math.PI / 52)) * 150,
@@ -284,30 +339,71 @@ async function initializeDeck() {
         });
         dealt = true;
         console.log(cards);
-        drawTable();
     } else {
         console.error('Failed to initialize deck');
     }
 
 }
 
-function drawTable() {
+function resizeCanvas() {
+    // Set canvas size to full window size
+    const header = document.querySelector('.header');
+    const headerHeight = header.offsetHeight;
+    
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
 
-    if (!ctx) {
+    // Adjust canvas style to cover the whole screen
+    canvas.style.position = 'fixed';
+    canvas.style.top = `${headerHeight}px`;
+    canvas.style.left = '0';
+    canvas.style.width = '100%';
+    canvas.style.height = '100%';
+
+    //Recalculate card positions
+    if (cards.length > 0) {
+        const centerX = canvas.width / 2;
+        const centerY = canvas.height / 2;
+        cards.forEach((card) => {
+            if (card.revealed) {
+                card.x = centerX;
+                card.y = centerY;
+            }
+            else {
+                card.x = centerX + Math.cos(card.id * (2 * Math.PI / 52)) * 150;
+                card.y = centerY + Math.sin(card.id * (2 * Math.PI / 52)) * 150;
+            }
+        });
+    }
+
+    cursorCanvas.width = canvas.width;
+    cursorCanvas.height = canvas.height;
+    cursorCanvas.style.left = canvas.offsetLeft + 'px';
+    cursorCanvas.style.top = canvas.offsetTop + 'px';
+
+    drawTable();
+}
+
+function drawPlayers() {
+    // Implement logic to draw player cursors
+    cursorCtx.clearRect(0, 0, cursorCanvas.width, cursorCanvas.height);
+
+    Object.keys(playerCursors).forEach(player_name => {
+        if (player_name !== client) {
+            const { interpolatedX, interpolatedY } = playerCursors[player_name];
+            drawCursor(interpolatedX, interpolatedY, player_name, 'red');
+        }
+    });
+}
+
+// use this during animations so it doesn't need to redraw the entire table
+function drawCards() {
+
+    if (!ctx || imagesLoaded !== totalImages) {
         console.error('Canvas context is not initialized');
         return; // Exit the function if ctx is not initialized
     }
 
-    // Draw table
-    ctx.fillStyle = '#008000';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-    // Draw can
-    if (canImage.complete) {
-        ctx.drawImage(canImage, canvas.width / 2 - canRadius, canvas.height / 2 - canRadius, canRadius * 2, canRadius * 2);
-    }
-
-    // Draw cards
     cards.sort((a, b) => a.zIndex - b.zIndex);
     cards.forEach((card, index) => {
         const cardWidth = card.size * 50;
@@ -335,6 +431,29 @@ function drawTable() {
 
         ctx.restore();
     });
+}
+
+function drawTable() {
+    if (!ctx || imagesLoaded !== totalImages) {
+        console.error('Canvas context is not initialized');
+        return; // Exit the function if ctx is not initialized
+    }
+
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    // Draw table
+    ctx.fillStyle = '#008000';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    // Draw can
+    if (canImage.complete) {
+        const canX = canvas.width / 2 - canRadius;
+        const canY = canvas.height / 2 - canRadius;
+        ctx.drawImage(canImage, canX, canY, canRadius * 2, canRadius * 2);
+    }
+
+    // Draw cards
+    drawCards();
 
     // Draw player information
     ctx.fillStyle = '#FFFFFF';
@@ -374,6 +493,7 @@ function drawTable() {
     players.forEach((player, index) => {
         ctx.fillText(player, boardX + 10, boardY + 40 + (index * 20));
     });
+
 }
 
 
@@ -386,17 +506,19 @@ function handleCanvasClick(event) {
     }
 
     const rect = canvas.getBoundingClientRect();
-    const x = event.clientX - rect.left;
-    const y = event.clientY - rect.top;
-
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+    
+    const x = (event.clientX - rect.left) * scaleX;
+    const y = (event.clientY - rect.top) * scaleY;
     // Check for the topmost card
     for (let i = cards.length - 1; i >= 0; i--) {
         const card = cards[i];
         
-        const cardLeft = card.x - cardWidth / 2;
-        const cardRight = card.x + cardWidth / 2;
-        const cardTop = card.y - cardHeight / 2;
-        const cardBottom = card.y + cardHeight / 2;
+        const cardLeft = card.x - (cardWidth * card.size) / 2;
+        const cardRight = card.x + (cardWidth * card.size) / 2;
+        const cardTop = card.y - (cardHeight * card.size) / 2;
+        const cardBottom = card.y + (cardHeight * card.size) / 2;
 
         if (x >= cardLeft && x <= cardRight && y >= cardTop && y <= cardBottom) {
             console.log(`Clicked on card id: ${card.id}, value: (${card.value})`);
@@ -410,29 +532,23 @@ function handleCanvasClick(event) {
     }
 }
 
-function handleCardDrawn(data) {
-    const card = cards.find(c => c.id === data.card);
-    if (card) {
-        busy = true;
-        card.revealed = true;
-        card.zIndex = nextZIndex++;
-        animateCard(card.id);
-        drawTable();
-    }
-}
 
 function handleGameOver(data) {
     alert(data.message);
     resetGameState();
 }
 
-function animateCard(cardId) {
+function handleCardDrawn(data) {
     // Find the card by its unique ID
-    const card = cards.find(c => c.id === cardId);
+    const card = cards.find(c => c.id === data.card);
     if (!card) {
-        console.error(`Card with ID ${cardId} not found.`);
+        console.error(`Card with ID ${card.id} not found.`);
         return;
     }
+
+    busy = true;
+    card.revealed = true;
+    card.zIndex = nextZIndex++;
 
     animatingCard = { ...card };  // Use a cloned object to prevent shared state issues
 
@@ -446,7 +562,7 @@ function animateCard(cardId) {
 
 
     function animate(time) {
-        if (animatingCard.id !== cardId) {
+        if (animatingCard.id !== card.id) {
             console.error(`Animating card changed from ID ${cardId}.`);
             return; // Abort animation if the card object changes
         }
@@ -462,14 +578,14 @@ function animateCard(cardId) {
         animatingCard.size = startSize + progress * 9; // Adjust size increment for scaling effect
 
         // Update the actual card in the cards array
-        const originalCard = cards.find(c => c.id === cardId);
+        const originalCard = cards.find(c => c.id === card.id);
         if (originalCard) {
             originalCard.x = animatingCard.x;
             originalCard.y = animatingCard.y;
             originalCard.size = animatingCard.size;
         }
 
-        drawTable();
+        drawCards();
 
         if (progress < 1) {
             requestAnimationFrame(animate);
@@ -478,16 +594,16 @@ function animateCard(cardId) {
             if (originalCard) {
                 originalCard.x = animatingCard.x;
                 originalCard.y = animatingCard.y;
-                revealCard(cardId); // Pass card ID to revealCard
+                const eventFunction = cardEvents[card.value] || cardEvents["default"];
+                eventFunction();
                 enlargedCard = originalCard;
             }
             addKeyListenerToShrinkCard();
             animatingCard = null;
         }
     }
-
-
     requestAnimationFrame(animate);
+    drawCards();
 }
 
 function addKeyListenerToShrinkCard() {
@@ -510,7 +626,7 @@ function handleCardClick(data) {
 
         currentPlayerIndex = (currentPlayerIndex + 1) % players.length; 
 
-        drawTable();
+        drawCards();
         enlargedCard = null;
 
         document.removeEventListener('keydown', shrinkCard);
@@ -538,7 +654,7 @@ function shrinkCard(event) {
 
         currentPlayerIndex = (currentPlayerIndex + 1) % players.length; 
 
-        drawTable();
+        drawCards();
         enlargedCard = null;
 
 
@@ -577,34 +693,117 @@ function openCan(){
 
 }
 
+function handleCursors(data) {
+    const cursors = data.cursors;
+    const currentTime = Date.now();
 
-function revealCard(cardId) {
-    const card = cards.find(c => c.id === cardId);
-    if (card) {
-        card.revealed = true;
-        const eventFunction = cardEvents[card.value] || cardEvents["default"];
-        eventFunction();
-        drawTable();
+    cursors.forEach(cursor => {
+        if (cursor.player_name === client) {
+            return;  
+        }
+
+        const screenCoords = fromNormalizedCoords(cursor.x, cursor.y, canvas.width, canvas.height);
+
+        if (!playerCursors[cursor.player_name]) {
+            playerCursors[cursor.player_name] = { 
+                x: screenCoords.x, 
+                y: screenCoords.y, 
+                lastX: screenCoords.x, 
+                lastY: screenCoords.y, 
+                interpolatedX: screenCoords.x,
+                interpolatedY: screenCoords.y,
+                animationStartTime: null 
+            };
+        } else {
+
+            const existingCursor = playerCursors[cursor.player_name];
+            
+            // Always update the target and start a new animation
+            existingCursor.startX = existingCursor.interpolatedX;
+            existingCursor.startY = existingCursor.interpolatedY;
+            existingCursor.targetX = screenCoords.x;
+            existingCursor.targetY = screenCoords.y;
+            existingCursor.animationStartTime = currentTime;
+        }
+    });
+}
+
+function updatePlayerPositions() {
+    const currentTime = Date.now();
+    Object.keys(playerCursors).forEach(player_name => {
+        const cursor = playerCursors[player_name];
+
+        if (cursor.lastUpdateTime) {
+            const elapsedTime = currentTime - cursor.animationStartTime;
+            const t = Math.min(elapsedTime / ANIMATION_DURATION, 1);
+
+            const easeT = easeInOutCubic(t);
+
+            // Interpolate position
+            cursor.interpolatedX = lerp(cursor.startX, cursor.targetX, easeT);
+            cursor.interpolatedY = lerp(cursor.startY, cursor.targetY, easeT);
+
+            if (t === 1) {
+                cursor.startX = cursor.targetX;
+                cursor.startY = cursor.targetY;
+                cursor.animationStartTime = null;
+            }
+        } else {
+            // If no animation is in progress, set interpolated position to target
+            cursor.interpolatedX = cursor.targetX;
+            cursor.interpolatedY = cursor.targetY;
+        }
+    });
+}
+
+function drawCursor(x, y, playerName, color) {
+
+    if (cursorImage.complete) {
+        // Draw the image
+        cursorCtx.drawImage(cursorImage, x - cursorImage.width / 2, y - cursorImage.height / 2);
+    } else {
+        // If the image hasn't loaded yet, draw a fallback circle
+        cursorCtx.beginPath();
+        cursorCtx.arc(x, y, 5, 0, 2 * Math.PI);
+        cursorCtx.fillStyle = color;
+        cursorCtx.fill();
     }
+    
+    // Draw the player name
+    cursorCtx.font = '12px Arial';
+    cursorCtx.fillStyle = '#FFFFFF';
+    cursorCtx.textAlign = 'center';
+    cursorCtx.fillText(playerName, x, y - cursorImage.height / 2 - 5);
 }
 
 function handleMouseMove(event) {
+    const rect = canvas.getBoundingClientRect();
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+    
+    const x = (event.clientX - rect.left) * scaleX;
+    const y = (event.clientY - rect.top) * scaleY;
+
+
+    const raw_x = event.clientX - rect.left;
+    const raw_y = event.clientY - rect.top;
+
+    const normalizedCoords = toNormalizedCoords(raw_x, raw_y, canvas.width, canvas.height);
+
+    socket.emit('mouse_move', {game_id: gameId, player_name: client, x: normalizedCoords.x, y: normalizedCoords.y});
+
     if (busy || !dealt) {
         return;
     }
-
-    const rect = canvas.getBoundingClientRect();
-    const x = event.clientX - rect.left;
-    const y = event.clientY - rect.top;
 
     // Check if mouse is over any card
     for (let i = cards.length - 1; i >= 0; i--) {
         const card = cards[i];
         
-        const cardLeft = card.x - cardWidth / 2;
-        const cardRight = card.x + cardWidth / 2;
-        const cardTop = card.y - cardHeight / 2;
-        const cardBottom = card.y + cardHeight / 2;
+        const cardLeft = card.x - (cardWidth * card.size) / 2;
+        const cardRight = card.x + (cardWidth * card.size) / 2;
+        const cardTop = card.y - (cardHeight * card.size) / 2;
+        const cardBottom = card.y + (cardHeight * card.size) / 2;
 
         if (x >= cardLeft && x <= cardRight && y >= cardTop && y <= cardBottom) {
             hoveredCardIndex = i;
@@ -662,6 +861,34 @@ function handleReset(data) {
     drawTable(); 
 }
 
+function handleLeavePage(event) {
+    if (!isLeavingIntentionally && gameId && client) {
+        // Cancel the event as per the standard
+        event.preventDefault();
+        // Chrome requires returnValue to be set
+        event.returnValue = '';
+
+        // Attempt to leave the game
+        leaveGame();
+    }
+}
+
+// Function to convert screen coordinates to normalized coordinates
+function toNormalizedCoords(x, y, canvasWidth, canvasHeight) {
+    return {
+        x: (x / canvasWidth) * NORMALIZED_WIDTH,
+        y: (y / canvasHeight) * NORMALIZED_HEIGHT
+    };
+}
+
+// Function to convert normalized coordinates back to screen coordinates
+function fromNormalizedCoords(nx, ny, canvasWidth, canvasHeight) {
+    return {
+        x: (nx / NORMALIZED_WIDTH) * canvasWidth,
+        y: (ny / NORMALIZED_HEIGHT) * canvasHeight
+    };
+}
+
 // there is probably an error in here
 async function resetGameState() {
 
@@ -695,8 +922,9 @@ if (window.location.pathname === '/') {
 }
 
 if (window.location.pathname === '/game') {
-    gameId = sessionStorage.getItem('gameId');
-    client = sessionStorage.getItem('client');
-    window.onload = init_game;
-    console.log(`type of ctx:  ${typeof ctx}`);
+    window.addEventListener('load', () => {
+        gameId = sessionStorage.getItem('gameId');
+        client = sessionStorage.getItem('client');
+        init_game();
+    });
 }

@@ -3,7 +3,8 @@ from flask import Flask, jsonify, request, render_template
 from flask_socketio import SocketIO, emit, join_room, leave_room
 import uuid
 import logging
-from classes import Game
+from datetime import datetime, timedelta
+from classes import Game, player_cursors
 
 logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
 
@@ -11,6 +12,8 @@ app = Flask(__name__, static_folder='static')
 socketio = SocketIO(app, cors_allowed_origins="*")
 
 games = {}
+BROADCAST_INTERVAL = 750
+UPDATE_INTERVAL = timedelta(milliseconds=50)
 
 @app.route('/')
 def show_index():
@@ -94,8 +97,40 @@ def on_leave(data):
     else:
         emit('player_left', {"players": []}, room=game_id)
 
+@socketio.on('mouse_move')
+def update_cursor(data):
+    game_id = data['game_id']
+    player_name = data['player_name']
+    cursor_x = data['x']
+    cursor_y = data['y']
+
+    if game_id in games:
+        game = games[game_id]
+        game.update_cursor(player_name, cursor_x, cursor_y)
+        logging.info(f"Received cursor update for game {game_id} from player {player_name}: ({cursor_x}, {cursor_y})")
+
+def broadcast_cursors():
+    logging.info("Starting broadcast_cursors background task.")
+    while True:
+        for game in games.values():
+
+            logging.info(f"Here are the games.values: {len(games.values())}")
+
+            cursor_positions = []
+            for player_name, (x, y) in game.player_cursors.items():
+                cursor_positions.append({
+                    "player_name": player_name,
+                    "x": x,
+                    "y": y
+                })
+            if cursor_positions:  # Only log if there are cursor positions
+                logging.info(f"Broadcasting cursor positions for game {game.id}: {cursor_positions}")
+            socketio.emit('cursor_update', {"cursors": cursor_positions}, room=game.id)
+        socketio.sleep(BROADCAST_INTERVAL / 1000.0)
+
 @socketio.on('join')
 def on_join(data):
+    socketio.start_background_task(target=broadcast_cursors)
     logging.info("Join event received")
     game_id = data['game_id']
     player_name = data['player_name']

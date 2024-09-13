@@ -7,6 +7,41 @@ from utilities import generate_random_integer
 
 logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
 
+class Cursor:
+    def __init__(self, x, y, name):
+        self.x = x
+        self.y = y
+        self.name
+        self.color
+
+    def update_position(self, x, y):
+        self.x = x
+        self.y = y
+
+    def return_position(self):
+        return self.x, self.y
+
+    def to_dict(self):
+        return {"x": self.x, "y": self.y, "name": self.name, "color": self.color}
+    
+
+class player_cursors:
+    def __init__(self):
+        self.cursors = {}
+
+    def add_cursor(self, x, y, client):
+        cursor = Cursor(x, y, client)
+        self.cursors.append(cursor)
+
+    def remove_cursor(self, client):
+        cursor = next((c for c in self.cursors if c.name == client), None)
+        self.cursors.remove(cursor)
+
+    def update_cursor(self, x, y, client):
+        cursor = next((c for c in self.cursors if c.name == client), None)
+        if cursor:
+            cursor.update_position(x, y)
+
 class Card:
     def __init__(self, suit, value):
         self.suit = suit
@@ -54,6 +89,8 @@ class Game:
         self.deck = Deck()
         self.started = False
         self.current_player_index = 0
+        self.player_cursors = {}
+        self.cursor_update_times = {}
         self.cards_on_table = []
         self.target_amount = generate_random_integer()
         self.turn = 0
@@ -95,6 +132,10 @@ class Game:
             return card
         logging.warning(f"No card drawn in game {self.id}")
         return None
+    
+    def update_cursor(self, player_name, x, y):
+        self.player_cursors[player_name] = (x, y)
+
 
     def to_dict(self):
         return {
