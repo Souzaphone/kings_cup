@@ -32,12 +32,11 @@ let gameState = null;
 let imagesLoaded = 0;
 let totalImages = 1;
 let playerCursors = {};
-let lastSentTime = 0;
-const THROTTLE_INTERVAL = 50;
-const UPDATE_INTERVAL = 100;
 const NORMALIZED_WIDTH = 1000;
 const NORMALIZED_HEIGHT = 1000;
 const ANIMATION_DURATION = 200;
+let lastSentTime = 0;
+const THROTTLE_INTERVAL = 100;
 
 
 // Initialize the game
@@ -790,8 +789,11 @@ function handleMouseMove(event) {
 
     const normalizedCoords = toNormalizedCoords(raw_x, raw_y, canvas.width, canvas.height);
 
-    socket.emit('mouse_move', {game_id: gameId, player_name: client, x: normalizedCoords.x, y: normalizedCoords.y});
-
+    const currentTime = Date.now();
+    if (currentTime - lastSentTime >= THROTTLE_INTERVAL) {
+        lastSentTime = currentTime;
+        socket.emit('mouse_move', {game_id: gameId, player_name: client, x: normalizedCoords.x, y: normalizedCoords.y});
+    }
     if (busy || !dealt) {
         return;
     }

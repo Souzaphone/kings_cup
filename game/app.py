@@ -12,7 +12,7 @@ app = Flask(__name__, static_folder='static')
 socketio = SocketIO(app, cors_allowed_origins="*")
 
 games = {}
-BROADCAST_INTERVAL = 750
+BROADCAST_INTERVAL = 100
 UPDATE_INTERVAL = timedelta(milliseconds=50)
 
 @app.route('/')
