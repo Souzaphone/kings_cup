@@ -594,7 +594,7 @@ function handleCardDrawn(data) {
                 originalCard.x = animatingCard.x;
                 originalCard.y = animatingCard.y;
                 const eventFunction = cardEvents[card.value] || cardEvents["default"];
-                eventFunction();
+                eventFunction(data.player);
                 enlargedCard = originalCard;
             }
             addKeyListenerToShrinkCard();
