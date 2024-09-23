@@ -12,7 +12,7 @@ app = Flask(__name__, static_folder='static')
 socketio = SocketIO(app, cors_allowed_origins="*")
 
 games = {}
-BROADCAST_INTERVAL = 100
+currentTick = 0
 UPDATE_INTERVAL = timedelta(milliseconds=50)
 
 @app.route('/')
@@ -112,21 +112,23 @@ def update_cursor(data):
 def broadcast_cursors():
     logging.info("Starting broadcast_cursors background task.")
     while True:
-        for game in games.values():
+        if (currentTick % 200 == 0):
+            for game in games.values():
 
-            logging.info(f"Here are the games.values: {len(games.values())}")
+                logging.info(f"Here are the games.values: {len(games.values())}")
 
-            cursor_positions = []
-            for player_name, (x, y) in game.player_cursors.items():
-                cursor_positions.append({
-                    "player_name": player_name,
-                    "x": x,
-                    "y": y
-                })
-            if cursor_positions:  # Only log if there are cursor positions
-                logging.info(f"Broadcasting cursor positions for game {game.id}: {cursor_positions}")
-            socketio.emit('cursor_update', {"cursors": cursor_positions}, room=game.id)
-        socketio.sleep(BROADCAST_INTERVAL / 1000.0)
+                cursor_positions = []
+                for player_name, (x, y) in game.player_cursors.items():
+                    cursor_positions.append({
+                        "player_name": player_name,
+                        "x": x,
+                        "y": y
+                    })
+                if cursor_positions:  # Only log if there are cursor positions
+                    logging.info(f"Broadcasting cursor positions for game {game.id}: {cursor_positions}")
+                socketio.emit('cursor_update', {"cursors": cursor_positions}, room=game.id)
+        currentTick += 1
+
 
 @socketio.on('join')
 def on_join(data):

@@ -36,7 +36,7 @@ const NORMALIZED_WIDTH = 1000;
 const NORMALIZED_HEIGHT = 1000;
 const ANIMATION_DURATION = 200;
 let lastSentTime = 0;
-const THROTTLE_INTERVAL = 100;
+const THROTTLE_INTERVAL = 50;
 
 
 // Initialize the game
@@ -318,7 +318,7 @@ async function initializeDeck() {
         totalImages += data.deck.length;
         cards = data.deck.map((card, i) => {
             const img = new Image();
-            img.src = `data:image/png;base64,${card.image_data}`;
+            img.src = card.imageData;
             img.onload = function() {
                 imagesLoaded++;
                 checkAllImagesLoaded();
