@@ -1,16 +1,21 @@
-const express = require('express');
-const http = require('http');
-const socketIo = require('socket.io');
-const { v4: uuidv4 } = require('uuid');
-const path = require('path');
-const { Game, Card, Deck } = require('./static/classes');
+import express from 'express';
+import { createServer } from 'http';
+import { Server } from 'socket.io';
+import { v4 as uuidv4 } from 'uuid';
+import { fileURLToPath } from 'url';
+import { dirname, join } from 'path';
+import { Game, Card, Deck } from './static/classes.js';
+
+// Convert __dirname for ES modules
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 
 const app = express();
-const server = http.createServer(app);
-const io = socketIo(server, { cors: { origin: "*" } });
+const server = createServer(app);
+const io = new Server(server, { cors: { origin: "*" } });
 
 app.use(express.json());
-app.use('/static', express.static(path.join(__dirname, 'static'), {
+app.use('/static', express.static(join(__dirname, 'static'), {
   setHeaders: (res, path) => {
     if (path.endsWith('.css')) {
       res.setHeader('Content-Type', 'text/css');
@@ -29,11 +34,11 @@ app.use((req, res, next) => {
 });
 
 app.get('/', (req, res) => {
-  res.sendFile(path.join(__dirname, 'templates', 'index.html'));
+  res.sendFile(join(__dirname, 'templates', 'index.html'));
 });
 
 app.get('/game', (req, res) => {
-  res.sendFile(path.join(__dirname, 'templates', 'game.html'));
+  res.sendFile(join(__dirname, 'templates', 'game.html'));
 });
 
 app.post('/create_game', (req, res) => {
@@ -206,7 +211,6 @@ io.on('connection', (socket) => {
 });
 
 function broadcastCursors() {
-
   if (currentTick % 10 === 0) {
     Object.values(games).forEach(game => {
       console.log(`Broadcasting cursor positions for game ${game.id}`);
@@ -223,12 +227,11 @@ function broadcastCursors() {
 
   currentTick++;
   console.log(`Tick: ${currentTick}`);
-
 }
 
 setInterval(broadcastCursors, 20);
 
-const PORT = process.env.PORT || 5000;;
+const PORT = process.env.PORT || 5000;
 server.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });

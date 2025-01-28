@@ -1,7 +1,9 @@
 // classes.js
-const crypto = require('crypto');
-const fs = require('fs');
-const path = require('path');
+import { fileURLToPath } from 'url';
+import { dirname, join } from 'path';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 
 // Utility function to generate random integer
 function generateRandomInteger() {
@@ -30,7 +32,7 @@ class Cursor {
     }
 }
 
-class PlayerCursors {
+export class PlayerCursors {
     constructor() {
         this.cursors = [];
     }
@@ -52,7 +54,7 @@ class PlayerCursors {
     }
 }
 
-class Card {
+export class Card {
     constructor(suit, value) {
         this.suit = suit;
         this.value = value;
@@ -62,7 +64,7 @@ class Card {
     loadImage() {
         const suitChar = this.suit.toLowerCase()[0];
         const valueStr = String(this.value).padStart(2, '0');
-        const imagePath =  `static/assets/${suitChar}${valueStr}.png`;
+        const imagePath = `/static/assets/${suitChar}${valueStr}.png`;
         
         return imagePath;
     }
@@ -76,7 +78,7 @@ class Card {
     }
 }
 
-class Deck {
+export class Deck {
     constructor() {
         const suits = ["Hearts", "Diamonds", "Clubs", "Spades"];
         const values = ["2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "1"];
@@ -106,7 +108,7 @@ class Deck {
     }
 }
 
-class Game {
+export class Game {
     constructor(gameId) {
         this.id = gameId;
         this.players = [];
@@ -185,5 +187,3 @@ class Game {
         };
     }
 }
-
-module.exports = { Cursor, PlayerCursors, Card, Deck, Game };
