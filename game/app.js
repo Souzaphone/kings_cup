@@ -39,6 +39,25 @@ app.get('/', (req, res) => {
 });
 
 app.get('/game', (req, res) => {
+  // Check if game_id and player_name are provided as query parameters
+  const gameId = req.query.game_id;
+  const playerName = req.query.player_name;
+  
+  // If no query parameters, redirect to index
+  if (!gameId || !playerName) {
+    return res.redirect('/');
+  }
+  
+  // Check if the game exists and player is part of it
+  if (!(gameId in games)) {
+    return res.redirect('/');
+  }
+  
+  const game = games[gameId];
+  if (!game.players.includes(playerName)) {
+    return res.redirect('/');
+  }
+  
   res.sendFile(join(__dirname, 'templates', 'game.html'));
 });
 
@@ -164,8 +183,13 @@ io.on('connection', (socket) => {
     playerInfo = { gameId: game_id, playerName: player_name };
     socket.join(game_id);
     const game = games[game_id];
-    console.log(`Player ${player_name} joined room for game ${game_id} with players ${game.players}`);
-    io.to(game_id).emit('player_joined', { players: game.players });
+    if (game) {
+      console.log(`Player ${player_name} joined room for game ${game_id} with players ${game.players}`);
+      io.to(game_id).emit('player_joined', { players: game.players });
+    } else {
+      console.log(`Player ${player_name} tried to join non-existent game ${game_id}`);
+      socket.emit('game_not_found', { game_id });
+    }
   });
 
   socket.on('leave', (data) => {
@@ -214,14 +238,17 @@ io.on('connection', (socket) => {
       if (card > -1) {
         console.log(`Player ${player_name} drew a card in game ${game_id}`);
         io.to(game_id).emit('card_drawn', { player: player_name, card: card });
+        game.drawCard();
 
         if (game.turn === game.targetAmount) {
           console.log(`Game ${game_id} over, target amount reached by ${player_name}`);
           io.to(game_id).emit('game_over', { message: `${player_name} opened the beer!` });
         }
-      } else {
-        console.log(`No more cards to draw in game ${game_id}`);
-        io.to(game_id).emit('game_over', { message: "No more cards in the deck" });
+
+        else if (game.turn === 52){
+          console.log(`No more cards to draw in game ${game_id}`);
+          io.to(game_id).emit('game_over', { message: "No more cards in the deck" });
+        }
       }
     }
   });

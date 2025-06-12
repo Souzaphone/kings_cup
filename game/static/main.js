@@ -283,7 +283,7 @@ function joinGame(password = null) {
                 sessionStorage.setItem('gameId', gameId);
                 sessionStorage.setItem('client', client);
 
-                window.location.href = `/game`;
+                window.location.href = `/game?game_id=${encodeURIComponent(gameId)}&player_name=${encodeURIComponent(client)}`;
                 socket.emit('join', {game_id: gameId, player_name: client});
             } else {
                 alert('Failed to join game: ' + data.message);
