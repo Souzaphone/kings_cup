@@ -263,6 +263,121 @@ io.on('connection', (socket) => {
     io.to(game_id).emit('game_reset');
   });
 
+  // Card Event Socket Handlers
+  
+  socket.on('request_player_selection', (data) => {
+    const { game_id, requesting_player, card_value } = data;
+    if (game_id in games) {
+      const game = games[game_id];
+      const availablePlayers = game.players.filter(p => p !== requesting_player);
+      socket.emit('show_player_selection', { 
+        players: availablePlayers,
+        card_value: card_value 
+      });
+    }
+  });
+
+  socket.on('player_selected', (data) => {
+    const { game_id, selected_player, card_value, requesting_player } = data;
+    if (game_id in games) {
+      io.to(game_id).emit('player_selection_made', {
+        requester: requesting_player,
+        target: selected_player,
+        card_value: card_value
+      });
+    }
+  });
+
+  socket.on('reaction_event_start', (data) => {
+    const { game_id, event_type, initiator } = data;
+    if (game_id in games) {
+      io.to(game_id).emit('reaction_event_active', {
+        event_type: event_type,
+        initiator: initiator,
+        timestamp: Date.now()
+      });
+    }
+  });
+
+  socket.on('reaction_response', (data) => {
+    const { game_id, player_name, response_time, event_type } = data;
+    if (game_id in games) {
+      io.to(game_id).emit('reaction_recorded', {
+        player: player_name,
+        time: response_time,
+        event_type: event_type
+      });
+    }
+  });
+
+  socket.on('text_input_round_start', (data) => {
+    const { game_id, prompt, initiator, timeout = 30000 } = data;
+    if (game_id in games) {
+      io.to(game_id).emit('text_input_prompt', {
+        prompt: prompt,
+        initiator: initiator,
+        timeout: timeout
+      });
+    }
+  });
+
+  socket.on('text_input_submit', (data) => {
+    const { game_id, player_name, input_text, card_value } = data;
+    if (game_id in games) {
+      io.to(game_id).emit('text_input_received', {
+        player: player_name,
+        text: input_text,
+        card_value: card_value
+      });
+    }
+  });
+
+  socket.on('sequential_event_start', (data) => {
+    const { game_id, event_type, player_order } = data;
+    if (game_id in games) {
+      io.to(game_id).emit('sequential_event_active', {
+        event_type: event_type,
+        current_player: player_order[0],
+        player_order: player_order
+      });
+    }
+  });
+
+  socket.on('sequential_action_complete', (data) => {
+    const { game_id, player_name, event_type } = data;
+    if (game_id in games) {
+      io.to(game_id).emit('sequential_next_player', {
+        completed_player: player_name,
+        event_type: event_type
+      });
+    }
+  });
+
+  socket.on('game_state_change', (data) => {
+    const { game_id, state_type, state_data } = data;
+    if (game_id in games) {
+      const game = games[game_id];
+      if (!game.specialStates) {
+        game.specialStates = {};
+      }
+      game.specialStates[state_type] = state_data;
+      io.to(game_id).emit('game_state_updated', {
+        state_type: state_type,
+        state_data: state_data
+      });
+    }
+  });
+
+  socket.on('drinking_complete', (data) => {
+    const { game_id, player_name, event_type } = data;
+    if (game_id in games) {
+      io.to(game_id).emit('drinking_finished', {
+        player: player_name,
+        event_type: event_type
+      });
+    }
+  });
+
   socket.on('disconnect', () => {
     console.log('User disconnected');
     if (playerInfo) {

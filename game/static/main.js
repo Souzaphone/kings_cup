@@ -1,5 +1,5 @@
 /// main.js
-import { cardEvents } from './cards.js';
+import { cardEvents, initializeCardEvents } from './cards.js';
 import { lerp, easeInOutCubic } from './utilities.js';
 
 // TODO: implement events for each individual card
@@ -147,6 +147,21 @@ async function init_game() {
     socket.on('game_reset', handleReset);
     socket.on('cursor_update', handleCursors);
     socket.on('cursor_batch_update', handleCursorBatch);
+    
+    // Card Event Socket Listeners
+    socket.on('show_player_selection', handleShowPlayerSelection);
+    socket.on('player_selection_made', handlePlayerSelectionMade);
+    socket.on('reaction_event_active', handleReactionEventActive);
+    socket.on('reaction_recorded', handleReactionRecorded);
+    socket.on('text_input_prompt', handleTextInputPrompt);
+    socket.on('text_input_received', handleTextInputReceived);
+    socket.on('sequential_event_active', handleSequentialEventActive);
+    socket.on('sequential_next_player', handleSequentialNextPlayer);
+    socket.on('game_state_updated', handleGameStateUpdated);
+    socket.on('drinking_finished', handleDrinkingFinished);
+
+    // Initialize card events with required variables
+    initializeCardEvents(socket, gameId, players, client);
 
     animatePulse();
     requestAnimationFrame(animatePulse);
@@ -307,6 +322,10 @@ function updateGameState(game) {
     console.log(`players: ${players}`);
 
     targetAmount = game.target_amount;
+    
+    // Update card events with new players list
+    initializeCardEvents(socket, gameId, players, client);
+    
     drawTable();
 }
 
@@ -330,6 +349,10 @@ function handleJoinGameClick() {
 
 function handlePlayerLeft(data) {
     players = data.players;
+    
+    // Update card events with new players list
+    initializeCardEvents(socket, gameId, players, client);
+    
     updateStartButtonState();
     drawTable();
 }
@@ -339,6 +362,10 @@ function handlePlayerJoined(data) {
     console.log(`Inside of handlePlayerJoined`);
 
     players = data.players;
+    
+    // Update card events with new players list
+    initializeCardEvents(socket, gameId, players, client);
+    
     updateStartButtonState();
     drawTable();
 }
@@ -1116,6 +1143,207 @@ async function resetGameState() {
     } catch (error) {
         console.error('Error resetting game state:', error);
     }
+}
+
+// Card Event Socket Handlers
+
+function handleShowPlayerSelection(data) {
+    const { players, card_value } = data;
+    import('./utilities.js').then(({ createPlayerSelector }) => {
+        createPlayerSelector(players, client, (selectedPlayer) => {
+            socket.emit('player_selected', {
+                game_id: gameId,
+                selected_player: selectedPlayer,
+                card_value: card_value,
+                requesting_player: client
+            });
+        });
+    });
+}
+
+function handlePlayerSelectionMade(data) {
+    const { requester, target, card_value } = data;
+    import('./utilities.js').then(({ createPopup, createDrinkingPrompt }) => {
+        if (card_value === "2") {
+            createPopup(`${requester} chose ${target} to drink!`, 3000);
+            if (target === client) {
+                createDrinkingPrompt(client, () => {
+                    socket.emit('drinking_complete', {
+                        game_id: gameId,
+                        player_name: client,
+                        event_type: 'you_drink'
+                    });
+                });
+            }
+        } else if (card_value === "8") {
+            createPopup(`${requester} chose ${target} as their drinking mate!`, 3000);
+            socket.emit('game_state_change', {
+                game_id: gameId,
+                state_type: 'drinking_mates',
+                state_data: { player1: requester, player2: target }
+            });
+        }
+    });
+}
+
+let reactionResults = [];
+let reactionEventActive = false;
+
+function handleReactionEventActive(data) {
+    const { event_type, initiator } = data;
+    reactionEventActive = true;
+    reactionResults = [];
+    
+    import('./utilities.js').then(({ createReactionPrompt }) => {
+        if (event_type === 'floor') {
+            createReactionPrompt("FLOOR! Move your cursor to the bottom!", 'bottom', (reactionTime) => {
+                socket.emit('reaction_response', {
+                    game_id: gameId,
+                    player_name: client,
+                    response_time: reactionTime,
+                    event_type: event_type
+                });
+            });
+        } else if (event_type === 'heaven') {
+            createReactionPrompt("HEAVEN! Move your cursor to the top!", 'top', (reactionTime) => {
+                socket.emit('reaction_response', {
+                    game_id: gameId,
+                    player_name: client,
+                    response_time: reactionTime,
+                    event_type: event_type
+                });
+            });
+        }
+    });
+}
+
+function handleReactionRecorded(data) {
+    const { player, time, event_type } = data;
+    reactionResults.push({ player, time });
+    
+    import('./utilities.js').then(({ createPopup, createDrinkingPrompt }) => {
+        if (reactionResults.length >= players.length) {
+            reactionEventActive = false;
+            const slowest = reactionResults.reduce((prev, curr) => prev.time > curr.time ? prev : curr);
+            
+            createPopup(`${slowest.player} was the slowest and must drink!`, 3000);
+            
+            if (slowest.player === client) {
+                createDrinkingPrompt(client, () => {
+                    socket.emit('drinking_complete', {
+                        game_id: gameId,
+                        player_name: client,
+                        event_type: event_type
+                    });
+                });
+            }
+        }
+    });
+}
+
+function handleTextInputPrompt(data) {
+    const { prompt, timeout } = data;
+    
+    import('./utilities.js').then(({ createTextInput }) => {
+        createTextInput(prompt, (inputText) => {
+            socket.emit('text_input_submit', {
+                game_id: gameId,
+                player_name: client,
+                input_text: inputText,
+                card_value: prompt.includes('rhyme') ? '9' : '10'
+            });
+        }, timeout);
+    });
+}
+
+let textInputResults = [];
+
+function handleTextInputReceived(data) {
+    const { player, text, card_value } = data;
+    textInputResults.push({ player, text });
+    
+    import('./utilities.js').then(({ createPopup }) => {
+        createPopup(`${player}: "${text}"`, 2000);
+        
+        if (textInputResults.length >= players.length) {
+            setTimeout(() => {
+                createPopup("Round complete! The worst answer drinks!", 3000);
+                textInputResults = [];
+            }, 2000);
+        }
+    });
+}
+
+let sequentialPlayers = [];
+let currentSequentialIndex = 0;
+
+function handleSequentialEventActive(data) {
+    const { event_type, player_order } = data;
+    sequentialPlayers = player_order;
+    currentSequentialIndex = 0;
+    
+    import('./utilities.js').then(({ createPopup, createDrinkingPrompt }) => {
+        if (event_type === 'waterfall') {
+            if (player_order[0] === client) {
+                createDrinkingPrompt(client, () => {
+                    socket.emit('sequential_action_complete', {
+                        game_id: gameId,
+                        player_name: client,
+                        event_type: event_type
+                    });
+                });
+            } else {
+                createPopup(`Waterfall started by ${player_order[0]}!`, 2000);
+            }
+        }
+    });
+}
+
+function handleSequentialNextPlayer(data) {
+    const { completed_player, event_type } = data;
+    currentSequentialIndex++;
+    
+    import('./utilities.js').then(({ createPopup, createDrinkingPrompt }) => {
+        if (currentSequentialIndex < sequentialPlayers.length) {
+            const nextPlayer = sequentialPlayers[currentSequentialIndex];
+            
+            if (nextPlayer === client) {
+                createDrinkingPrompt(client, () => {
+                    socket.emit('sequential_action_complete', {
+                        game_id: gameId,
+                        player_name: client,
+                        event_type: event_type
+                    });
+                });
+            } else {
+                createPopup(`${nextPlayer}'s turn to drink!`, 2000);
+            }
+        } else {
+            createPopup("Waterfall complete!", 2000);
+        }
+    });
+}
+
+function handleGameStateUpdated(data) {
+    const { state_type, state_data } = data;
+    
+    import('./utilities.js').then(({ createPopup }) => {
+        if (state_type === 'question_queen') {
+            createPopup(`${state_data.player} is now the Question Queen!`, 3000);
+        } else if (state_type === 'new_rule') {
+            createPopup(`New Rule: ${state_data.rule}`, 5000);
+        } else if (state_type === 'drinking_mates') {
+            createPopup(`${state_data.player1} and ${state_data.player2} are now drinking mates!`, 3000);
+        }
+    });
+}
+
+function handleDrinkingFinished(data) {
+    const { player, event_type } = data;
+    
+    import('./utilities.js').then(({ createPopup }) => {
+        createPopup(`${player} finished drinking!`, 1500);
+    });
 }
 
 // Initialize the game when the page loads

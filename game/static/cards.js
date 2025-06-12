@@ -1,65 +1,195 @@
 // cards.js
+import { createPopup, createPlayerSelector, createTextInput, createDrinkingPrompt } from './utilities.js';
+
+let socket, gameId, players, client;
+
+export function initializeCardEvents(socketRef, gameIdRef, playersRef, clientRef) {
+    socket = socketRef;
+    gameId = gameIdRef;
+    players = playersRef;
+    client = clientRef;
+}
 
 export const cardEvents = {
     "1": (player) => {
         console.log("Waterfall!");
-
-        waterfallTurn(player);
-
-        // will have each person start drinking and when they click or press any button their turn is done
-        // Implement specific logic for Ace card
+        createPopup(`${player} drew Waterfall!`, 2000);
+        
+        const playerOrder = [...players];
+        const startIndex = playerOrder.indexOf(player);
+        const orderedPlayers = [...playerOrder.slice(startIndex), ...playerOrder.slice(0, startIndex)];
+        
+        socket.emit('sequential_event_start', {
+            game_id: gameId,
+            event_type: 'waterfall',
+            player_order: orderedPlayers
+        });
     },
     "2": (player) => {
         console.log("You!");
-
-        // pull up a menu to choose which player you want to drink
-
-        // Implement specific logic for card 2
+        createPopup(`${player} drew You!`, 2000);
+        
+        if (player === client) {
+            socket.emit('request_player_selection', {
+                game_id: gameId,
+                requesting_player: client,
+                card_value: "2"
+            });
+        }
     },
-    // Add more events for other card values
     "3": (player) => {
         console.log("Me!");
-        // me. I drink
+        createPopup(`${player} drew Me! ${player} drinks!`, 3000);
+        
+        if (player === client) {
+            createDrinkingPrompt(client, () => {
+                socket.emit('drinking_complete', {
+                    game_id: gameId,
+                    player_name: client,
+                    event_type: 'me_drink'
+                });
+            });
+        }
     },
     "4": (player) => {
         console.log("Floor!");
-        // everyone has to move their cursor to the bottom of the screen
+        createPopup(`${player} drew Floor!`, 2000);
+        
+        socket.emit('reaction_event_start', {
+            game_id: gameId,
+            event_type: 'floor',
+            initiator: player
+        });
     },
     "5": (player) => {
         console.log("Guys!");
-        // guys drink  
+        createPopup(`${player} drew Guys! All guys drink!`, 3000);
+        
+        // For demo purposes, assume client gender or let all players decide
+        createDrinkingPrompt("Guys", () => {
+            socket.emit('drinking_complete', {
+                game_id: gameId,
+                player_name: client,
+                event_type: 'guys_drink'
+            });
+        });
     },
     "6": (player) => {
         console.log("Chicks!");
-        // All girls drink
+        createPopup(`${player} drew Chicks! All girls drink!`, 3000);
+        
+        // For demo purposes, assume client gender or let all players decide
+        createDrinkingPrompt("Girls", () => {
+            socket.emit('drinking_complete', {
+                game_id: gameId,
+                player_name: client,
+                event_type: 'chicks_drink'
+            });
+        });
     },
     "7": (player) => {
         console.log("Heaven!");
-        // Last person to move their cursor to the top of the screen drinks
+        createPopup(`${player} drew Heaven!`, 2000);
+        
+        socket.emit('reaction_event_start', {
+            game_id: gameId,
+            event_type: 'heaven',
+            initiator: player
+        });
     },
     "8": (player) => {
         console.log("Mate!");
-        // Pick another player and everytime you drink they drink and vice versa
+        createPopup(`${player} drew Mate!`, 2000);
+        
+        if (player === client) {
+            socket.emit('request_player_selection', {
+                game_id: gameId,
+                requesting_player: client,
+                card_value: "8"
+            });
+        }
     },
     "9": (player) => {
         console.log("Rhyme!");
-        // Pick a word and every player has 5* seconds to type something that rhymes with it
+        createPopup(`${player} drew Rhyme!`, 2000);
+        
+        if (player === client) {
+            createTextInput("Pick a word for others to rhyme with:", (word) => {
+                socket.emit('text_input_round_start', {
+                    game_id: gameId,
+                    prompt: `Think of a word that rhymes with: ${word}`,
+                    initiator: client,
+                    timeout: 15000
+                });
+            }, 10000);
+        }
     },
     "10": (player) => {
         console.log("Categories!");
-        // Pick a category 
+        createPopup(`${player} drew Categories!`, 2000);
+        
+        if (player === client) {
+            createTextInput("Pick a category:", (category) => {
+                socket.emit('text_input_round_start', {
+                    game_id: gameId,
+                    prompt: `Name something from the category: ${category}`,
+                    initiator: client,
+                    timeout: 20000
+                });
+            }, 10000);
+        }
     },
     "11": (player) => {
         console.log("Fingers!");
-        // everyone put their piece on the beer and a timer counts down on everyones turn and they get to guess how many fingers will be left on the beer
+        createPopup(`${player} drew Fingers! Everyone put a finger on the can!`, 3000);
+        
+        setTimeout(() => {
+            createTextInput(`Guess how many fingers will remain (0-${players.length}):`, (guess) => {
+                socket.emit('text_input_submit', {
+                    game_id: gameId,
+                    player_name: client,
+                    input_text: guess,
+                    card_value: "11"
+                });
+            }, 10000);
+        }, 3000);
     },
     "12": (player) => {
         console.log("Question queen!");
-        // This person tries to get others to answer questions. Will be a big crown instead of a poker chip so you know who it is
+        createPopup(`${player} drew Question Queen!`, 3000);
+        
+        socket.emit('game_state_change', {
+            game_id: gameId,
+            state_type: 'question_queen',
+            state_data: { player: player }
+        });
     },
     "13": (player) => {
         console.log("New Rule!");
-        // Brainstorm a bunch of rules that you can pick from, or allow the user to make up a rule and put it on the board
+        createPopup(`${player} drew Make a Rule!`, 2000);
+        
+        if (player === client) {
+            const predefinedRules = [
+                "No pointing",
+                "No saying names",
+                "No swearing",
+                "Drink with your non-dominant hand",
+                "No saying 'drink' or 'drank'",
+                "Viking rule - make horns, last person drinks",
+                "Thumb master - put thumb on table",
+                "Question master - questions only"
+            ];
+            
+            createTextInput("Create a new rule (or press Enter for random):", (rule) => {
+                const finalRule = rule.trim() || predefinedRules[Math.floor(Math.random() * predefinedRules.length)];
+                
+                socket.emit('game_state_change', {
+                    game_id: gameId,
+                    state_type: 'new_rule',
+                    state_data: { rule: finalRule, creator: client }
+                });
+            }, 15000);
+        }
     },
     "default": (player) => {
         console.log("Default card event triggered!");
@@ -67,32 +197,3 @@ export const cardEvents = {
     }
 };
 
-// TODO: need to make a popup for each player that shows that they are still drinking, and when they are done drinking to click any button to continue their turn
-// will start out with each person receieving a popup on their screen that shows what card it is. 
-// need to keep track of who drew the card and then prompt them to click any button to start drinking
-function waterfallTurn(player) {
-
-    createPopup(`${player} Press any button to start Waterfall!`);
-
-}
-
-// TODO: need to fix how this gets removed
-function createPopup(content) {
-    const popUp = document.createElement('div');
-    popUp.style.position = 'fixed';
-    popUp.style.top = '50%';
-    popUp.style.left = '50%';
-    popUp.style.transform = 'translate(-50%, -50%)';
-    popUp.style.background = 'white';
-    popUp.style.padding = '20px';
-    popUp.style.border = '2px solid black';
-    popUp.style.zIndex = '1000';
-    popUp.innerHTML = `<h2>${content}</h2>`;
-    
-    document.body.appendChild(popUp);
-
-    // Remove the pop-up after 3 seconds
-    setTimeout(() => {
-        document.body.removeChild(popUp);
-    }, 3000);
-}
