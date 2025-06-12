@@ -184,6 +184,15 @@ export class Game {
         }
     }
 
+    getAllCursors() {
+        const cursors = {};
+        Object.keys(this.playerCursors).forEach(playerName => {
+            const [x, y] = this.playerCursors[playerName];
+            cursors[playerName] = { x, y };
+        });
+        return cursors;
+    }
+
     validatePassword(password) {
         if (!this.password) return true;
         return this.password === password;

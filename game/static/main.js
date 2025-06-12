@@ -34,9 +34,12 @@ let totalImages = 1;
 let playerCursors = {};
 const NORMALIZED_WIDTH = 1000;
 const NORMALIZED_HEIGHT = 1000;
-const ANIMATION_DURATION = 200;
+const ANIMATION_DURATION = 100; // Shorter duration for smoother interpolation with 20Hz updates
 let lastSentTime = 0;
 const THROTTLE_INTERVAL = 16; // 60fps for smooth cursor tracking
+const CLIENT_REFRESH_RATE = 16.67; // 60Hz client refresh (1000ms / 60 = 16.67ms)
+let lastCursorRenderTime = 0;
+let isLeavingIntentionally = false;
 
 
 // Initialize the game
@@ -143,6 +146,7 @@ async function init_game() {
     socket.on('player_left', handlePlayerLeft);
     socket.on('game_reset', handleReset);
     socket.on('cursor_update', handleCursors);
+    socket.on('cursor_batch_update', handleCursorBatch);
 
     animatePulse();
     requestAnimationFrame(animatePulse);
@@ -163,8 +167,17 @@ function setupCursorCanvas() {
 }
 
 function gameLoop() {
+    const currentTime = Date.now();
+    
+    // Update player cursor positions at 60Hz
     updatePlayerPositions();
-    drawPlayers();
+    
+    // Render cursors at 60Hz but only if enough time has passed
+    if (currentTime - lastCursorRenderTime >= CLIENT_REFRESH_RATE) {
+        drawPlayers();
+        lastCursorRenderTime = currentTime;
+    }
+    
     requestAnimationFrame(gameLoop);
 }
 
@@ -862,8 +875,21 @@ function openCan(){
 }
 
 function handleCursors(data) {
-    // Handle single cursor update from new real-time system
+    // Handle single cursor update from old system (kept for compatibility)
     const { player_name, x, y } = data;
+    updateSingleCursor(player_name, x, y);
+}
+
+function handleCursorBatch(data) {
+    // Handle batch cursor updates from 20Hz server system
+    const { cursors } = data;
+    Object.keys(cursors).forEach(player_name => {
+        const { x, y } = cursors[player_name];
+        updateSingleCursor(player_name, x, y);
+    });
+}
+
+function updateSingleCursor(player_name, x, y) {
     const currentTime = Date.now();
 
     if (player_name === client) {

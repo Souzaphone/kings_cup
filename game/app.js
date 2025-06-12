@@ -25,6 +25,8 @@ app.use('/static', express.static(join(__dirname, 'static'), {
 
 const games = {};
 const INACTIVE_GAME_TIMEOUT = 30 * 60 * 1000; // 30 minutes
+const CURSOR_UPDATE_INTERVAL = 50; // 20Hz (1000ms / 20 = 50ms)
+let cursorUpdateIntervals = {}; // Store intervals for each game
 
 // Logging middleware
 app.use((req, res, next) => {
@@ -86,6 +88,7 @@ app.post('/leave_game', (req, res) => {
       console.log(`Player ${player_name} left game ${game_id}`);
 
       if (game.isPlayersEmpty()) {
+        stopCursorBroadcasting(game_id);
         delete games[game_id];
         console.log(`Game ${game_id} removed`);
       }
@@ -183,12 +186,10 @@ io.on('connection', (socket) => {
       const game = games[game_id];
       game.updateCursor(player_name, x, y);
       
-      // Immediately broadcast cursor update to other players in the room
-      socket.to(game_id).emit('cursor_update', {
-        player_name: player_name,
-        x: x,
-        y: y
-      });
+      // Start cursor broadcasting for this game if not already started
+      if (!cursorUpdateIntervals[game_id]) {
+        startCursorBroadcasting(game_id);
+      }
     }
   });
 
@@ -251,6 +252,7 @@ io.on('connection', (socket) => {
               
               // Clean up game if empty
               if (game.isPlayersEmpty()) {
+                  stopCursorBroadcasting(gameId);
                   delete games[gameId];
                   console.log(`Game ${gameId} removed on disconnect`);
               }
@@ -260,7 +262,36 @@ io.on('connection', (socket) => {
   });
 });
 
-// Removed tick-based cursor broadcasting - now using real-time event-driven approach
+// Cursor broadcasting system - 20Hz server updates
+function startCursorBroadcasting(gameId) {
+  if (cursorUpdateIntervals[gameId]) {
+    return; // Already broadcasting for this game
+  }
+  
+  cursorUpdateIntervals[gameId] = setInterval(() => {
+    if (!(gameId in games)) {
+      // Game no longer exists, stop broadcasting
+      clearInterval(cursorUpdateIntervals[gameId]);
+      delete cursorUpdateIntervals[gameId];
+      return;
+    }
+    
+    const game = games[gameId];
+    const cursors = game.getAllCursors();
+    
+    // Only broadcast if there are cursors to send
+    if (Object.keys(cursors).length > 0) {
+      io.to(gameId).emit('cursor_batch_update', { cursors });
+    }
+  }, CURSOR_UPDATE_INTERVAL);
+}
+
+function stopCursorBroadcasting(gameId) {
+  if (cursorUpdateIntervals[gameId]) {
+    clearInterval(cursorUpdateIntervals[gameId]);
+    delete cursorUpdateIntervals[gameId];
+  }
+}
 
 // Clean up inactive games
 function cleanupInactiveGames() {
@@ -268,6 +299,7 @@ function cleanupInactiveGames() {
   Object.entries(games).forEach(([gameId, game]) => {
     if (now - game.lastActivity.getTime() > INACTIVE_GAME_TIMEOUT) {
       console.log(`Removing inactive game: ${gameId}`);
+      stopCursorBroadcasting(gameId);
       delete games[gameId];
     }
   });
