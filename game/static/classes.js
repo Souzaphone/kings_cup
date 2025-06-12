@@ -109,7 +109,11 @@ export class Deck {
 }
 
 export class Game {
-    constructor(gameId) {
+    isPlayersEmpty() {
+        return this.players.length === 0;
+    }
+
+    constructor(gameId, isPublic = true, password = null, hostName = null) {
         this.id = gameId;
         this.players = [];
         this.deck = new Deck();
@@ -120,7 +124,12 @@ export class Game {
         this.cardsOnTable = [];
         this.targetAmount = generateRandomInteger();
         this.turn = 0;
-        console.log(`Game created with ID: ${this.id}`);
+        this.isPublic = isPublic;
+        this.password = password;
+        this.hostName = hostName;
+        this.createdAt = new Date();
+        this.lastActivity = new Date();
+        console.log(`Game created with ID: ${this.id}, Public: ${isPublic}`);
     }
 
     addPlayer(playerName) {
@@ -136,6 +145,7 @@ export class Game {
         const index = this.players.indexOf(playerName);
         if (index !== -1) {
             this.players.splice(index, 1);
+            delete this.playerCursors[playerName];
             console.log(`Player ${playerName} removed from game ${this.id}`);
             return true;
         }
@@ -153,10 +163,6 @@ export class Game {
         return false;
     }
 
-    isPlayersEmpty() {
-        return this.players.length === 0;
-    }
-
     drawCard() {
         const card = this.deck.draw();
         if (card) {
@@ -171,7 +177,30 @@ export class Game {
     }
 
     updateCursor(playerName, x, y) {
-        this.playerCursors[playerName] = [x, y];
+        if (this.players.includes(playerName)) {
+            this.playerCursors[playerName] = [x, y];
+            this.cursorUpdateTimes[playerName] = Date.now();
+            this.lastActivity = new Date();
+        }
+    }
+
+    validatePassword(password) {
+        if (!this.password) return true;
+        return this.password === password;
+    }
+
+    getLobbyInfo() {
+        return {
+            id: this.id,
+            hostName: this.hostName,
+            playerCount: this.players.length,
+            maxPlayers: 20,
+            isPublic: this.isPublic,
+            hasPassword: !!this.password,
+            started: this.started,
+            createdAt: this.createdAt,
+            lastActivity: this.lastActivity
+        };
     }
 
     toDict() {
@@ -183,7 +212,9 @@ export class Game {
             cardsOnTable: this.cardsOnTable.map(card => card.toDict()),
             deckCount: this.deck.cards.length,
             targetAmount: this.targetAmount,
-            turn: this.turn
+            turn: this.turn,
+            isPublic: this.isPublic,
+            hostName: this.hostName
         };
     }
 }

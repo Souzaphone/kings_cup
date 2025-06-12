@@ -24,8 +24,7 @@ app.use('/static', express.static(join(__dirname, 'static'), {
 }));
 
 const games = {};
-let currentTick = 0;
-const UPDATE_INTERVAL = 50; // milliseconds
+const INACTIVE_GAME_TIMEOUT = 30 * 60 * 1000; // 30 minutes
 
 // Logging middleware
 app.use((req, res, next) => {
@@ -42,15 +41,16 @@ app.get('/game', (req, res) => {
 });
 
 app.post('/create_game', (req, res) => {
+  const { player_name, is_public = true, password } = req.body;
   const gameId = uuidv4();
-  const currentGame = new Game(gameId);
+  const currentGame = new Game(gameId, is_public, password, player_name);
   games[gameId] = currentGame;
-  console.log(`Game created with ID: ${gameId}`);
+  console.log(`Game created with ID: ${gameId}, Public: ${is_public}, Host: ${player_name}`);
   res.json({ success: true, game_id: currentGame.id, target_amount: currentGame.targetAmount });
 });
 
 app.post('/join_game', (req, res) => {
-  const { game_id, player_name } = req.body;
+  const { game_id, player_name, password } = req.body;
 
   if (typeof game_id !== 'string' || typeof player_name !== 'string') {
     return res.json({ success: false, message: "Invalid game ID or player name format" });
@@ -58,6 +58,12 @@ app.post('/join_game', (req, res) => {
 
   if (game_id in games) {
     const game = games[game_id];
+    
+    // Check password for private games
+    if (!game.validatePassword(password)) {
+      return res.json({ success: false, message: "Invalid password" });
+    }
+    
     if (game.addPlayer(player_name)) {
       console.log(`Player ${player_name} joined game ${game_id}`);
       return res.json({ success: true, game: game.toDict() });
@@ -120,9 +126,14 @@ app.post('/get_game_state', (req, res) => {
 app.post('/reset_game', (req, res) => {
   const { game_id } = req.body;
   if (game_id in games) {
-    const players = games[game_id].players;
+    const originalGame = games[game_id];
+    const players = originalGame.players;
+    const isPublic = originalGame.isPublic;
+    const password = originalGame.password;
+    const hostName = originalGame.hostName;
+    
     delete games[game_id];
-    const game = new Game(game_id);
+    const game = new Game(game_id, isPublic, password, hostName);
     game.players = players;
     games[game_id] = game;
     console.log(`Game ${game_id} reset`);
@@ -130,11 +141,24 @@ app.post('/reset_game', (req, res) => {
   return res.json({ success: true });
 });
 
+// New endpoint to get public games list
+app.get('/public_games', (req, res) => {
+  const publicGames = Object.values(games)
+    .filter(game => game.isPublic && !game.started)
+    .map(game => game.getLobbyInfo())
+    .sort((a, b) => b.lastActivity - a.lastActivity); // Most recent first
+  
+  res.json({ success: true, games: publicGames });
+});
+
 io.on('connection', (socket) => {
   console.log('A user connected');
 
+  let playerInfo = null;
+
   socket.on('join', (data) => {
     const { game_id, player_name } = data;
+    playerInfo = { gameId: game_id, playerName: player_name };
     socket.join(game_id);
     const game = games[game_id];
     console.log(`Player ${player_name} joined room for game ${game_id} with players ${game.players}`);
@@ -158,7 +182,13 @@ io.on('connection', (socket) => {
     if (game_id in games) {
       const game = games[game_id];
       game.updateCursor(player_name, x, y);
-      console.log(`Received cursor update for game ${game_id} from player ${player_name}: (${x}, ${y})`);
+      
+      // Immediately broadcast cursor update to other players in the room
+      socket.to(game_id).emit('cursor_update', {
+        player_name: player_name,
+        x: x,
+        y: y
+      });
     }
   });
 
@@ -207,29 +237,43 @@ io.on('connection', (socket) => {
 
   socket.on('disconnect', () => {
     console.log('User disconnected');
+    if (playerInfo) {
+      const { gameId, playerName } = playerInfo;
+      
+      // Make the leave_game request internally
+      if (gameId && playerName && games[gameId]) {
+          const game = games[gameId];
+          if (game.removePlayer(playerName)) {
+              console.log(`Player ${playerName} removed on disconnect from game ${gameId}`);
+              
+              // Notify remaining players
+              io.to(gameId).emit('player_left', { players: game.players });
+              
+              // Clean up game if empty
+              if (game.isPlayersEmpty()) {
+                  delete games[gameId];
+                  console.log(`Game ${gameId} removed on disconnect`);
+              }
+          }
+      }
+    }
   });
 });
 
-function broadcastCursors() {
-  if (currentTick % 10 === 0) {
-    Object.values(games).forEach(game => {
-      console.log(`Broadcasting cursor positions for game ${game.id}`);
-      const cursorPositions = Object.entries(game.playerCursors).map(([player_name, [x, y]]) => ({
-        player_name,
-        x,
-        y
-      }));
-      if (cursorPositions.length > 0) {
-        io.to(game.id).emit('cursor_update', { cursors: cursorPositions });
-      }
-    });
-  }
+// Removed tick-based cursor broadcasting - now using real-time event-driven approach
 
-  currentTick++;
-  console.log(`Tick: ${currentTick}`);
+// Clean up inactive games
+function cleanupInactiveGames() {
+  const now = Date.now();
+  Object.entries(games).forEach(([gameId, game]) => {
+    if (now - game.lastActivity.getTime() > INACTIVE_GAME_TIMEOUT) {
+      console.log(`Removing inactive game: ${gameId}`);
+      delete games[gameId];
+    }
+  });
 }
 
-setInterval(broadcastCursors, 20);
+setInterval(cleanupInactiveGames, 5 * 60 * 1000); // Clean up every 5 minutes
 
 const PORT = process.env.PORT || 5000;
 server.listen(PORT, () => {

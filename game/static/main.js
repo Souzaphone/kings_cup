@@ -36,7 +36,7 @@ const NORMALIZED_WIDTH = 1000;
 const NORMALIZED_HEIGHT = 1000;
 const ANIMATION_DURATION = 200;
 let lastSentTime = 0;
-const THROTTLE_INTERVAL = 50;
+const THROTTLE_INTERVAL = 16; // 60fps for smooth cursor tracking
 
 
 // Initialize the game
@@ -53,8 +53,22 @@ async function init_index() {
 
     document.getElementById('create-game-btn').addEventListener('click', createGame);
     document.getElementById('join-game-btn').addEventListener('click', handleJoinGameClick);
-    document.getElementById('player-name').addEventListener('input', updateJoinButtonState);
-    document.getElementById('game-id').addEventListener('input', updateJoinButtonState);
+    document.getElementById('player-name').addEventListener('input', updateButtonStates);
+    document.getElementById('game-id').addEventListener('input', updateButtonStates);
+    document.getElementById('refresh-games-btn').addEventListener('click', loadPublicGames);
+    document.getElementById('password-submit').addEventListener('click', handlePasswordSubmit);
+    document.getElementById('password-cancel').addEventListener('click', hidePasswordModal);
+    
+    // Game type radio buttons
+    document.querySelectorAll('input[name="game-type"]').forEach(radio => {
+        radio.addEventListener('change', handleGameTypeChange);
+    });
+    
+    // Load public games on page load
+    loadPublicGames();
+    
+    // Auto-refresh games every 10 seconds
+    setInterval(loadPublicGames, 10000);
 }
 
 async function init_game() {
@@ -89,12 +103,14 @@ async function init_game() {
     window.addEventListener('load', resizeCanvas);
     window.addEventListener('resize', resizeCanvas);
     window.addEventListener('beforeunload', handleLeavePage);
+    window.addEventListener('popstate', handleNavigationChange);
     // await resetGameState();
 
     document.getElementById('start-game-btn').addEventListener('click', handleStartGame);
     document.getElementById('reset-btn').addEventListener('click', resetGameState);
     document.getElementById('copy-game-id-btn').addEventListener('click', copyGameId);
     document.getElementById('leave-btn').addEventListener('click', () => {
+        console.log('Leave button clicked');
         isLeavingIntentionally = true;
         leaveGame();
     });
@@ -177,19 +193,44 @@ function get_game_state() {
 
 function createGame() {
     client = document.getElementById('player-name').value;
-    if (client) {
-        fetch('/create_game', { method: 'POST' })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    gameId = data.game_id;
-                    console.log(`Game ID: ${gameId}`)
-                    targetAmount = data.target_amount
-                    console.log(`random amount is: ${targetAmount}`);
-                    joinGame();
-                }
-            });
+    const isPublic = document.querySelector('input[name="game-type"]:checked').value === 'public';
+    const password = isPublic ? null : document.getElementById('game-password').value;
+    
+    if (!client) {
+        alert('Please enter your player name.');
+        return;
     }
+    
+    if (!isPublic && !password) {
+        alert('Please enter a password for private game.');
+        return;
+    }
+    
+    fetch('/create_game', { 
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+            player_name: client,
+            is_public: isPublic,
+            password: password
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            gameId = data.game_id;
+            console.log(`Game ID: ${gameId}`);
+            targetAmount = data.target_amount;
+            console.log(`random amount is: ${targetAmount}`);
+            joinGame();
+        } else {
+            alert('Failed to create game: ' + data.message);
+        }
+    })
+    .catch(error => {
+        console.error('Error creating game:', error);
+        alert('Failed to create game.');
+    });
 }
 
 function leaveGame() {
@@ -210,31 +251,37 @@ function leaveGame() {
     }
 }
 
-function joinGame() {
+function joinGame(password = null) {
     console.log(`Joining game with ID: ${gameId}`);
     
     if (gameId && client) {
         fetch('/join_game', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({game_id: gameId, player_name: client})
+            body: JSON.stringify({game_id: gameId, player_name: client, password: password})
         })
         .then(response => response.json())
         .then(data => {
             if (data.success) {
-
                 console.log(`gameId: ${gameId}, client: ${client}`);
                 gameState = data.game;
-
                 console.log(gameState);
 
                 sessionStorage.setItem('gameId', gameId);
                 sessionStorage.setItem('client', client);
 
                 window.location.href = `/game`;
-
                 socket.emit('join', {game_id: gameId, player_name: client});
+            } else {
+                alert('Failed to join game: ' + data.message);
+                if (data.message === 'Invalid password') {
+                    showPasswordModal(gameId);
+                }
             }
+        })
+        .catch(error => {
+            console.error('Error joining game:', error);
+            alert('Failed to join game.');
         });
     } else {
         alert('Please enter your player name.');
@@ -253,16 +300,24 @@ function updateGameState(game) {
 function handleJoinGameClick() {
     gameId = document.getElementById('game-id').value;
     client = document.getElementById('player-name').value;
-    if (gameId) {
-        joinGame();
-    } else {
+    const password = document.getElementById('join-password').value;
+    
+    if (!gameId) {
         alert('Please enter a Game ID.');
+        return;
     }
+    
+    if (!client) {
+        alert('Please enter your player name.');
+        return;
+    }
+    
+    joinGame(password);
 }
 
 function handlePlayerLeft(data) {
     players = data.players;
-    updateStartButtonState;
+    updateStartButtonState();
     drawTable();
 }
 
@@ -286,13 +341,127 @@ async function handleGameStarted(gameState) {
     drawTable();
 }
 
-function updateJoinButtonState() {
+function updateButtonStates() {
     const playerName = document.getElementById('player-name').value.trim();
     const inputGameId = document.getElementById('game-id').value.trim();
     const joinButton = document.getElementById('join-game-btn');
     const createGameButton = document.getElementById('create-game-btn');
+    
     createGameButton.disabled = !playerName;
     joinButton.disabled = !(inputGameId && playerName);
+}
+
+// New functions for lobby system
+function loadPublicGames() {
+    const gamesContainer = document.getElementById('games-list');
+    const loadingDiv = document.getElementById('games-loading');
+    const noGamesDiv = document.getElementById('no-games');
+    
+    loadingDiv.style.display = 'block';
+    noGamesDiv.style.display = 'none';
+    gamesContainer.innerHTML = '';
+    
+    fetch('/public_games')
+        .then(response => response.json())
+        .then(data => {
+            loadingDiv.style.display = 'none';
+            
+            if (data.success && data.games.length > 0) {
+                data.games.forEach(game => {
+                    const gameElement = createGameElement(game);
+                    gamesContainer.appendChild(gameElement);
+                });
+            } else {
+                noGamesDiv.style.display = 'block';
+            }
+        })
+        .catch(error => {
+            console.error('Error loading public games:', error);
+            loadingDiv.style.display = 'none';
+            noGamesDiv.textContent = 'Failed to load games';
+            noGamesDiv.style.display = 'block';
+        });
+}
+
+function createGameElement(game) {
+    const gameDiv = document.createElement('div');
+    gameDiv.className = 'game-item';
+    gameDiv.onclick = () => joinPublicGame(game.id, game.hasPassword);
+    
+    const timeSince = getTimeSince(new Date(game.lastActivity));
+    
+    gameDiv.innerHTML = `
+        <div class="game-info">
+            <div><strong>Host:</strong> ${game.hostName || 'Unknown'}</div>
+            <div class="game-meta">
+                Players: ${game.playerCount}/${game.maxPlayers} | 
+                ${game.hasPassword ? '🔒 Private' : '🌐 Public'} | 
+                Last activity: ${timeSince}
+            </div>
+        </div>
+        <button onclick="event.stopPropagation(); joinPublicGame('${game.id}', ${game.hasPassword})">
+            Join
+        </button>
+    `;
+    
+    return gameDiv;
+}
+
+function joinPublicGame(publicGameId, hasPassword) {
+    client = document.getElementById('player-name').value.trim();
+    if (!client) {
+        alert('Please enter your player name first.');
+        return;
+    }
+    
+    gameId = publicGameId; // Set local gameId variable
+    
+    if (hasPassword) {
+        showPasswordModal(publicGameId);
+    } else {
+        joinGame();
+    }
+}
+
+function showPasswordModal(targetGameId) {
+    document.getElementById('password-modal').style.display = 'block';
+    document.getElementById('modal-password').value = '';
+    document.getElementById('modal-password').focus();
+    window.currentGameId = targetGameId;
+}
+
+function hidePasswordModal() {
+    document.getElementById('password-modal').style.display = 'none';
+}
+
+function handlePasswordSubmit() {
+    const password = document.getElementById('modal-password').value;
+    if (!password) {
+        alert('Please enter a password.');
+        return;
+    }
+    
+    hidePasswordModal();
+    gameId = window.currentGameId;
+    joinGame(password);
+}
+
+function handleGameTypeChange() {
+    const isPrivate = document.querySelector('input[name="game-type"]:checked').value === 'private';
+    document.getElementById('password-section').style.display = isPrivate ? 'block' : 'none';
+}
+
+function getTimeSince(date) {
+    const now = new Date();
+    const diff = now - date;
+    const minutes = Math.floor(diff / 60000);
+    const hours = Math.floor(diff / 3600000);
+    const days = Math.floor(diff / 86400000);
+    
+    if (days > 0) return `${days}d ago`;
+    if (hours > 0) return `${hours}h ago`;
+    if (minutes > 0) return `${minutes}m ago`;
+    return 'Just now';
 }
 
 function updateStartButtonState() {
@@ -693,38 +862,36 @@ function openCan(){
 }
 
 function handleCursors(data) {
-    const cursors = data.cursors;
+    // Handle single cursor update from new real-time system
+    const { player_name, x, y } = data;
     const currentTime = Date.now();
 
-    cursors.forEach(cursor => {
-        if (cursor.player_name === client) {
-            return;  
-        }
+    if (player_name === client) {
+        return;  
+    }
 
-        const screenCoords = fromNormalizedCoords(cursor.x, cursor.y, canvas.width, canvas.height);
+    const screenCoords = fromNormalizedCoords(x, y, canvas.width, canvas.height);
 
-        if (!playerCursors[cursor.player_name]) {
-            playerCursors[cursor.player_name] = { 
-                x: screenCoords.x, 
-                y: screenCoords.y, 
-                lastX: screenCoords.x, 
-                lastY: screenCoords.y, 
-                interpolatedX: screenCoords.x,
-                interpolatedY: screenCoords.y,
-                animationStartTime: null 
-            };
-        } else {
-
-            const existingCursor = playerCursors[cursor.player_name];
-            
-            // Always update the target and start a new animation
-            existingCursor.startX = existingCursor.interpolatedX;
-            existingCursor.startY = existingCursor.interpolatedY;
-            existingCursor.targetX = screenCoords.x;
-            existingCursor.targetY = screenCoords.y;
-            existingCursor.animationStartTime = currentTime;
-        }
-    });
+    if (!playerCursors[player_name]) {
+        playerCursors[player_name] = { 
+            x: screenCoords.x, 
+            y: screenCoords.y, 
+            lastX: screenCoords.x, 
+            lastY: screenCoords.y, 
+            interpolatedX: screenCoords.x,
+            interpolatedY: screenCoords.y,
+            animationStartTime: null 
+        };
+    } else {
+        const existingCursor = playerCursors[player_name];
+        
+        // Always update the target and start a new animation
+        existingCursor.startX = existingCursor.interpolatedX;
+        existingCursor.startY = existingCursor.interpolatedY;
+        existingCursor.targetX = screenCoords.x;
+        existingCursor.targetY = screenCoords.y;
+        existingCursor.animationStartTime = currentTime;
+    }
 }
 
 function updatePlayerPositions() {
@@ -732,7 +899,7 @@ function updatePlayerPositions() {
     Object.keys(playerCursors).forEach(player_name => {
         const cursor = playerCursors[player_name];
 
-        if (cursor.lastUpdateTime) {
+        if (cursor.animationStartTime) {
             const elapsedTime = currentTime - cursor.animationStartTime;
             const t = Math.min(elapsedTime / ANIMATION_DURATION, 1);
 
@@ -749,8 +916,8 @@ function updatePlayerPositions() {
             }
         } else {
             // If no animation is in progress, set interpolated position to target
-            cursor.interpolatedX = cursor.targetX;
-            cursor.interpolatedY = cursor.targetY;
+            cursor.interpolatedX = cursor.targetX || cursor.interpolatedX;
+            cursor.interpolatedY = cursor.targetY || cursor.interpolatedY;
         }
     });
 }
@@ -875,6 +1042,13 @@ function handleLeavePage(event) {
     }
 }
 
+// Function to handle when the back button is pressed
+function handleNavigationChange(event) {
+    if (gameId && client) {
+        leaveGame();
+    }
+}
+
 // Function to convert screen coordinates to normalized coordinates
 function toNormalizedCoords(x, y, canvasWidth, canvasHeight) {
     return {
@@ -924,7 +1098,8 @@ if (window.location.pathname === '/') {
 }
 
 if (window.location.pathname === '/game') {
-    window.addEventListener('load', () => {
+    document.addEventListener('DOMContentLoaded', () => {
+        console.log('DOM fully loaded');
         gameId = sessionStorage.getItem('gameId');
         client = sessionStorage.getItem('client');
         init_game();
