@@ -11,8 +11,15 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "@mediapipe/camera_utils": "^0.3.1675466862",
+    "@mediapipe/control_utils": "^0.6.1675466023",
+    "@mediapipe/drawing_utils": "^0.3.1675466124",
+    "@mediapipe/hands": "^0.4.1675469240",
+    "@mediapipe/pose": "^0.5.1675469404",
+    "@tensorflow/tfjs": "^4.22.0",
     "express": "^4.21.2",
     "nodemon": "^3.1.4",
+    "simple-peer": "^9.11.1",
     "socket.io": "^4.8.1",
     "uuid": "^11.0.5"
   },

@@ -1,6 +1,7 @@
 /// main.js
 import { cardEvents, initializeCardEvents } from './cards.js';
 import { lerp, easeInOutCubic } from './utilities.js';
+import { WebcamManager } from './webcam.js';
 
 // TODO: implement events for each individual card
 // have it so only cards that when a card is being animated it is not flashing
@@ -40,6 +41,7 @@ const THROTTLE_INTERVAL = 16; // 60fps for smooth cursor tracking
 const CLIENT_REFRESH_RATE = 16.67; // 60Hz client refresh (1000ms / 60 = 16.67ms)
 let lastCursorRenderTime = 0;
 let isLeavingIntentionally = false;
+let webcamManager = null;
 
 
 // Initialize the game
@@ -112,6 +114,7 @@ async function init_game() {
     document.getElementById('start-game-btn').addEventListener('click', handleStartGame);
     document.getElementById('reset-btn').addEventListener('click', resetGameState);
     document.getElementById('copy-game-id-btn').addEventListener('click', copyGameId);
+    document.getElementById('toggle-webcam-btn').addEventListener('click', toggleWebcam);
     document.getElementById('leave-btn').addEventListener('click', () => {
         console.log('Leave button clicked');
         isLeavingIntentionally = true;
@@ -263,6 +266,13 @@ function createGame() {
 
 function leaveGame() {
     isLeavingIntentionally = true;
+    
+    // Clean up webcam resources
+    if (webcamManager) {
+        webcamManager.destroy();
+        webcamManager = null;
+    }
+    
     if (gameId && client) {
         fetch('/leave_game', {
             method: 'POST',
@@ -1220,11 +1230,22 @@ function handleReactionEventActive(data) {
 function handleReactionRecorded(data) {
     const { player, time, event_type } = data;
     reactionResults.push({ player, time });
+
+    const uniquePlayers = [...new Set(reactionResults.map(r => r.player))];
     
     import('./utilities.js').then(({ createPopup, createDrinkingPrompt }) => {
-        if (reactionResults.length >= players.length) {
+        if (uniquePlayers.length >= players.length) {
             reactionEventActive = false;
-            const slowest = reactionResults.reduce((prev, curr) => prev.time > curr.time ? prev : curr);
+            
+            // For Heaven (7) and Floor (4), the last person to react should drink
+            // Higher reaction time = slower to react = last person
+            console.log('Reaction results:', reactionResults);
+            
+            // Sort by time to make the logic clear: highest time = slowest = last to react
+            const sortedResults = [...reactionResults].sort((a, b) => b.time - a.time);
+            const slowest = sortedResults[0]; // Player with highest reaction time (slowest)
+            
+            console.log('Slowest player (should drink):', slowest);
             
             createPopup(`${slowest.player} was the slowest and must drink!`, 3000);
             
@@ -1237,6 +1258,9 @@ function handleReactionRecorded(data) {
                     });
                 });
             }
+            
+            // Clear results for next reaction event
+            reactionResults = [];
         }
     });
 }
@@ -1344,6 +1368,61 @@ function handleDrinkingFinished(data) {
     import('./utilities.js').then(({ createPopup }) => {
         createPopup(`${player} finished drinking!`, 1500);
     });
+}
+
+// Webcam functionality
+async function toggleWebcam() {
+    const button = document.getElementById('toggle-webcam-btn');
+    
+    if (!webcamManager || !webcamManager.isInitialized) {
+        try {
+            button.textContent = 'Initializing...';
+            button.disabled = true;
+            
+            webcamManager = new WebcamManager();
+            await webcamManager.initialize(socket, gameId, client);
+            
+            // Set up drinking detection callback for game integration
+            webcamManager.setDrinkingCallback((playerName, isDrinking) => {
+                console.log(`Drink detection: ${playerName} ${isDrinking ? 'started' : 'stopped'} drinking`);
+                
+                // Integrate with game logic - automatically complete drinking actions
+                if (isDrinking) {
+                    import('./utilities.js').then(({ createPopup }) => {
+                        createPopup(`AI detected: ${playerName} is drinking! 🍺`, 2000);
+                    });
+                } else {
+                    // Automatically emit drinking_complete when drinking stops
+                    socket.emit('drinking_complete', {
+                        game_id: gameId,
+                        player_name: playerName,
+                        event_type: 'ai_detected_drinking'
+                    });
+                }
+            });
+            
+            button.textContent = 'Disable Webcam';
+            button.classList.remove('btn-success');
+            button.classList.add('btn-warning');
+            
+        } catch (error) {
+            console.error('Failed to initialize webcam:', error);
+            import('./utilities.js').then(({ createPopup }) => {
+                createPopup('Failed to access webcam. Please check permissions.', 3000);
+            });
+            button.textContent = 'Enable Webcam';
+        } finally {
+            button.disabled = false;
+        }
+    } else {
+        // Disable webcam
+        webcamManager.destroy();
+        webcamManager = null;
+        
+        button.textContent = 'Enable Webcam';
+        button.classList.remove('btn-warning');
+        button.classList.add('btn-success');
+    }
 }
 
 // Initialize the game when the page loads

@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Webcam Test - King's Cup</title>
+    <script src="https://cdn.jsdelivr.net/npm/simple-peer@9.11.1/simplepeer.min.js"></script>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        #video-container { 
+            display: flex; 
+            flex-wrap: wrap; 
+            gap: 10px; 
+            margin: 20px 0;
+        }
+        video { 
+            width: 300px; 
+            height: 200px; 
+            border: 2px solid #ccc;
+            border-radius: 10px;
+        }
+        button { 
+            padding: 10px 20px; 
+            margin: 10px 5px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        .start { background-color: #4CAF50; color: white; }
+        .stop { background-color: #f44336; color: white; }
+        .status { margin: 10px 0; padding: 10px; background-color: #f0f0f0; border-radius: 5px; }
+    </style>
+</head>
+<body>
+    <h1>King's Cup - Webcam & Drink Detection Test</h1>
+    
+    <div class="status">
+        <h3>Status: <span id="status">Not initialized</span></h3>
+        <p>Drinking Detection: <span id="drinking-status">Not active</span></p>
+    </div>
+    
+    <button class="start" onclick="startWebcam()">Start Webcam</button>
+    <button class="stop" onclick="stopWebcam()">Stop Webcam</button>
+    
+    <div id="video-container">
+        <!-- Videos will be added here -->
+    </div>
+    
+    <div id="logs">
+        <h3>Logs:</h3>
+        <div id="log-content" style="height: 200px; overflow-y: scroll; border: 1px solid #ccc; padding: 10px; background-color: #f9f9f9;">
+        </div>
+    </div>
+
+    <script type="module">
+        import { WebcamManager } from './webcam.js';
+        
+        let webcamManager = null;
+        
+        function log(message) {
+            const logContent = document.getElementById('log-content');
+            const timestamp = new Date().toLocaleTimeString();
+            logContent.innerHTML += `<p>[${timestamp}] ${message}</p>`;
+            logContent.scrollTop = logContent.scrollHeight;
+        }
+        
+        async function startWebcam() {
+            try {
+                document.getElementById('status').textContent = 'Initializing...';
+                log('Starting webcam initialization...');
+                
+                webcamManager = new WebcamManager();
+                
+                // Mock socket for testing
+                const mockSocket = {
+                    emit: (event, data) => {
+                        log(`Socket emit: ${event} - ${JSON.stringify(data)}`);
+                    },
+                    on: (event, callback) => {
+                        log(`Socket listener added for: ${event}`);
+                    }
+                };
+                
+                await webcamManager.initialize(mockSocket, 'test-game-id', 'test-player');
+                
+                // Set up drinking detection callback
+                webcamManager.setDrinkingCallback((playerName, isDrinking) => {
+                    document.getElementById('drinking-status').textContent = 
+                        isDrinking ? `${playerName} is drinking! 🍺` : `${playerName} stopped drinking`;
+                    log(`Drink detection: ${playerName} ${isDrinking ? 'started' : 'stopped'} drinking`);
+                });
+                
+                document.getElementById('status').textContent = 'Active';
+                log('Webcam initialized successfully!');
+                
+            } catch (error) {
+                document.getElementById('status').textContent = 'Error: ' + error.message;
+                log('Error: ' + error.message);
+                console.error('Webcam initialization failed:', error);
+            }
+        }
+        
+        function stopWebcam() {
+            if (webcamManager) {
+                webcamManager.destroy();
+                webcamManager = null;
+                document.getElementById('status').textContent = 'Stopped';
+                document.getElementById('drinking-status').textContent = 'Not active';
+                log('Webcam stopped');
+            }
+        }
+        
+        // Make functions available globally
+        window.startWebcam = startWebcam;
+        window.stopWebcam = stopWebcam;
+        
+        log('Test page loaded. Click "Start Webcam" to begin testing.');
+    </script>
+</body>
+</html>

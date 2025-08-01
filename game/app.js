@@ -61,6 +61,10 @@ app.get('/game', (req, res) => {
   res.sendFile(join(__dirname, 'templates', 'game.html'));
 });
 
+app.get('/test-webcam', (req, res) => {
+  res.sendFile(join(__dirname, 'static', 'test-webcam.html'));
+});
+
 app.post('/create_game', (req, res) => {
   const { player_name, is_public = true, password } = req.body;
   const gameId = uuidv4();
@@ -375,6 +379,51 @@ io.on('connection', (socket) => {
         player: player_name,
         event_type: event_type
       });
+    }
+  });
+
+  // WebRTC signaling events
+  socket.on('webcam_ready', (data) => {
+    const { gameId, playerName } = data;
+    socket.to(gameId).emit('player_webcam_ready', {
+      playerName: playerName
+    });
+  });
+
+  socket.on('webrtc_offer', (data) => {
+    const { gameId, to, from, offer } = data;
+    socket.to(gameId).emit('webrtc_offer', {
+      from: from,
+      offer: offer
+    });
+  });
+
+  socket.on('webrtc_answer', (data) => {
+    const { gameId, to, from, answer } = data;
+    socket.to(gameId).emit('webrtc_answer', {
+      from: from,
+      answer: answer
+    });
+  });
+
+  socket.on('webrtc_ice_candidate', (data) => {
+    const { gameId, to, from, candidate } = data;
+    socket.to(gameId).emit('webrtc_ice_candidate', {
+      from: from,
+      candidate: candidate
+    });
+  });
+
+  // Drinking detection events
+  socket.on('drinking_state_change', (data) => {
+    const { gameId, playerName, isDrinking } = data;
+    if (gameId in games) {
+      socket.to(gameId).emit('player_drinking_state', {
+        playerName: playerName,
+        isDrinking: isDrinking
+      });
+      
+      console.log(`Player ${playerName} ${isDrinking ? 'started' : 'stopped'} drinking`);
     }
   });
 
