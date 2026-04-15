@@ -305,6 +305,86 @@ html, body {
 .kc-hidden { display: none !important; }
 
 /* ----------------------------------------------------------
+   Phase 04 Additions: Overlay component variants
+   ---------------------------------------------------------- */
+
+/* Popup title highlight (card events use accent color) */
+.kc-popup-title-accent {
+  color: var(--kc-accent);
+  font-size: 1.35rem;
+  font-weight: 700;
+  margin-bottom: 0.5rem;
+}
+
+/* Player selector button */
+.kc-player-select-btn {
+  display: block;
+  width: 100%;
+  padding: 0.75rem 1rem;
+  margin-bottom: 0.5rem;
+  background: var(--kc-bg);
+  border: 1px solid var(--kc-border);
+  border-radius: var(--kc-radius-sm);
+  font-size: 0.95rem;
+  font-weight: 500;
+  color: var(--kc-text);
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.12s, border-color 0.12s;
+}
+.kc-player-select-btn:hover {
+  background: #eff6ff;
+  border-color: var(--kc-accent);
+  color: var(--kc-accent);
+}
+
+/* Timer text in text-input rounds */
+.kc-timer-text {
+  font-size: 0.85rem;
+  color: var(--kc-danger);
+  font-weight: 600;
+  margin-top: 0.75rem;
+  text-align: center;
+}
+
+/* Drinking prompt done button */
+.kc-drinking-btn {
+  margin-top: 1rem;
+  width: 100%;
+  padding: 0.75rem;
+  background: var(--kc-success);
+  color: #fff;
+  border: none;
+  border-radius: var(--kc-radius-sm);
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.kc-drinking-btn:hover {
+  background: #16a34a;
+}
+
+/* Reaction prompt action button */
+.kc-reaction-btn {
+  margin-top: 1rem;
+  width: 100%;
+  padding: 0.75rem;
+  background: var(--kc-warning);
+  color: var(--kc-text);
+  border: none;
+  border-radius: var(--kc-radius-sm);
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.kc-reaction-btn:hover {
+  background: #d97706;
+  color: #fff;
+}
+
+/* ----------------------------------------------------------
    4. Keyframe Animations
    ---------------------------------------------------------- */
 @keyframes kc-fade-in {

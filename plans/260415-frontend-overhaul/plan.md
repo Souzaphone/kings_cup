@@ -50,7 +50,7 @@ Pattern: `phase-NN-descriptive-slug.md`
 | **01** | [Design Foundation](./phase-01-design-foundation.md) | frontend-overhaul | Tailwind CDN, tokens, style.css | Done |
 | **02** | [Lobby Redesign](./phase-02-lobby-redesign.md)     | frontend-overhaul   | index.html full restyle        | Done |
 | **03** | [Game Page Layout](./phase-03-game-page-layout.md) | frontend-overhaul   | game.html header & controls    | Done |
-| **04** | [UI Overlays & Components](./phase-04-ui-overlays.md) | frontend-overhaul | Popups, modals, toasts, loading | Pending |
+| **04** | [UI Overlays & Components](./phase-04-ui-overlays.md) | frontend-overhaul | Popups, modals, toasts, loading | Done |
 
 ### Group Summary
 

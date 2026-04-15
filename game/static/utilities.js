@@ -1,11 +1,10 @@
 // utilities.js
 
-// Standard Normal variate using Box-Muller transform.
-export function gaussianRandom(mean=0, stdev=1) {
-    const u = 1 - Math.random(); // Converting [0,1) to (0,1]
+// ── Math helpers ────────────────────────────────────────────
+export function gaussianRandom(mean = 0, stdev = 1) {
+    const u = 1 - Math.random();
     const v = Math.random();
-    const z = Math.sqrt( -2.0 * Math.log( u ) ) * Math.cos( 2.0 * Math.PI * v );
-    // Transform to the desired mean and standard deviation:
+    const z = Math.sqrt(-2.0 * Math.log(u)) * Math.cos(2.0 * Math.PI * v);
     return Math.round(z * stdev + mean);
 }
 
@@ -17,217 +16,228 @@ export function easeInOutCubic(t) {
     return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
 }
 
-// UI Helper Functions for Card Events
-
-export function createPopup(content, duration = 3000, buttons = null) {
-    const popup = document.createElement('div');
-    popup.className = 'card-event-popup';
-    popup.style.position = 'fixed';
-    popup.style.top = '50%';
-    popup.style.left = '50%';
-    popup.style.transform = 'translate(-50%, -50%)';
-    popup.style.background = 'rgba(0, 0, 0, 0.9)';
-    popup.style.color = 'white';
-    popup.style.padding = '30px';
-    popup.style.border = '3px solid #FFD700';
-    popup.style.borderRadius = '15px';
-    popup.style.zIndex = '1000';
-    popup.style.textAlign = 'center';
-    popup.style.maxWidth = '400px';
-    popup.style.minWidth = '300px';
-    popup.innerHTML = `<h2 style="margin-top: 0; color: #FFD700;">${content}</h2>`;
-    
-    if (buttons) {
-        const buttonContainer = document.createElement('div');
-        buttonContainer.style.marginTop = '20px';
-        
-        buttons.forEach(button => {
-            const btn = document.createElement('button');
-            btn.textContent = button.text;
-            btn.style.margin = '5px';
-            btn.style.padding = '10px 20px';
-            btn.style.background = '#4CAF50';
-            btn.style.color = 'white';
-            btn.style.border = 'none';
-            btn.style.borderRadius = '5px';
-            btn.style.cursor = 'pointer';
-            btn.onclick = () => {
-                button.callback();
-                document.body.removeChild(popup);
-            };
-            buttonContainer.appendChild(btn);
-        });
-        
-        popup.appendChild(buttonContainer);
-    }
-    
-    document.body.appendChild(popup);
-
-    if (duration > 0) {
-        setTimeout(() => {
-            if (document.body.contains(popup)) {
-                document.body.removeChild(popup);
-            }
-        }, duration);
-    }
-    
-    return popup;
-}
-
-export function createPlayerSelector(players, excludePlayer, callback) {
+// ── UI Helper: backdrop overlay ──────────────────────────────
+// Uses .kc-overlay--modal modifier class for z-index tier (1100).
+// Do NOT use style.zIndex — CSSOM silently discards var() references.
+function createOverlay() {
     const overlay = document.createElement('div');
-    overlay.style.position = 'fixed';
-    overlay.style.top = '0';
-    overlay.style.left = '0';
-    overlay.style.width = '100%';
-    overlay.style.height = '100%';
-    overlay.style.background = 'rgba(0, 0, 0, 0.8)';
-    overlay.style.zIndex = '1001';
-    overlay.style.display = 'flex';
-    overlay.style.alignItems = 'center';
-    overlay.style.justifyContent = 'center';
-
-    const selector = document.createElement('div');
-    selector.style.background = 'white';
-    selector.style.padding = '30px';
-    selector.style.borderRadius = '15px';
-    selector.style.textAlign = 'center';
-    selector.innerHTML = '<h2 style="margin-top: 0;">Choose a Player</h2>';
-
-    const availablePlayers = players.filter(player => player !== excludePlayer);
-    
-    availablePlayers.forEach(player => {
-        const playerBtn = document.createElement('button');
-        playerBtn.textContent = player;
-        playerBtn.style.display = 'block';
-        playerBtn.style.width = '200px';
-        playerBtn.style.margin = '10px auto';
-        playerBtn.style.padding = '15px';
-        playerBtn.style.background = '#FF6B6B';
-        playerBtn.style.color = 'white';
-        playerBtn.style.border = 'none';
-        playerBtn.style.borderRadius = '8px';
-        playerBtn.style.cursor = 'pointer';
-        playerBtn.style.fontSize = '16px';
-        
-        playerBtn.onclick = () => {
-            callback(player);
-            document.body.removeChild(overlay);
-        };
-        
-        selector.appendChild(playerBtn);
-    });
-
-    overlay.appendChild(selector);
-    document.body.appendChild(overlay);
-    
+    overlay.className = 'kc-overlay kc-overlay--modal';
     return overlay;
 }
 
+// ── createPopup ──────────────────────────────────────────────
+// Shows a centered popup with optional action buttons.
+// duration > 0: auto-dismisses after `duration` ms
+// duration === 0: stays until manually closed
+export function createPopup(content, duration = 3000, buttons = null) {
+    const overlay = createOverlay();
+
+    const popup = document.createElement('div');
+    popup.className = 'kc-popup';
+    popup.setAttribute('data-test', 'card-event-popup');
+    popup.setAttribute('role', 'dialog');
+    popup.setAttribute('aria-modal', 'true');
+
+    const title = document.createElement('p');
+    title.className = 'kc-popup-title-accent';
+    title.textContent = content;
+    popup.appendChild(title);
+
+    if (buttons && buttons.length > 0) {
+        const btnRow = document.createElement('div');
+        btnRow.className = 'flex gap-2 justify-end mt-4';
+
+        buttons.forEach(({ text, callback }) => {
+            const btn = document.createElement('button');
+            btn.className = 'kc-btn kc-btn-primary';
+            btn.textContent = text;
+            btn.onclick = () => {
+                callback();
+                if (document.body.contains(overlay)) document.body.removeChild(overlay);
+            };
+            btnRow.appendChild(btn);
+        });
+
+        popup.appendChild(btnRow);
+    }
+
+    overlay.appendChild(popup);
+    document.body.appendChild(overlay);
+
+    if (duration > 0) {
+        setTimeout(() => {
+            if (document.body.contains(overlay)) document.body.removeChild(overlay);
+        }, duration);
+    }
+
+    return overlay;
+}
+
+// ── createPlayerSelector ─────────────────────────────────────
+// Shows a modal with a button per selectable player.
+export function createPlayerSelector(players, excludePlayer, callback) {
+    const overlay = createOverlay();
+
+    const panel = document.createElement('div');
+    panel.className = 'kc-popup';
+    panel.setAttribute('data-test', 'player-selector');
+    panel.setAttribute('role', 'dialog');
+    panel.setAttribute('aria-modal', 'true');
+
+    const heading = document.createElement('h3');
+    heading.textContent = 'Choose a Player';
+    panel.appendChild(heading);
+
+    const list = document.createElement('div');
+    list.className = 'mt-3 flex flex-col gap-1';
+
+    const available = players.filter(p => p !== excludePlayer);
+    available.forEach(player => {
+        const btn = document.createElement('button');
+        btn.className = 'kc-player-select-btn';
+        btn.textContent = player;
+        btn.setAttribute('data-test', `select-player-${player}`);
+        btn.onclick = () => {
+            callback(player);
+            if (document.body.contains(overlay)) document.body.removeChild(overlay);
+        };
+        list.appendChild(btn);
+    });
+
+    panel.appendChild(list);
+    overlay.appendChild(panel);
+    document.body.appendChild(overlay);
+
+    return overlay;
+}
+
+// ── createTextInput ───────────────────────────────────────────
+// Shows a modal with a text input and countdown timer.
 export function createTextInput(prompt, callback, timeout = 30000) {
-    const overlay = document.createElement('div');
-    overlay.style.position = 'fixed';
-    overlay.style.top = '0';
-    overlay.style.left = '0';
-    overlay.style.width = '100%';
-    overlay.style.height = '100%';
-    overlay.style.background = 'rgba(0, 0, 0, 0.8)';
-    overlay.style.zIndex = '1001';
-    overlay.style.display = 'flex';
-    overlay.style.alignItems = 'center';
-    overlay.style.justifyContent = 'center';
+    const overlay = createOverlay();
 
-    const inputBox = document.createElement('div');
-    inputBox.style.background = 'white';
-    inputBox.style.padding = '30px';
-    inputBox.style.borderRadius = '15px';
-    inputBox.style.textAlign = 'center';
-    
-    inputBox.innerHTML = `
-        <h2 style="margin-top: 0;">${prompt}</h2>
-        <input type="text" id="text-input" style="width: 250px; padding: 10px; font-size: 16px; margin: 10px;">
-        <br>
-        <button id="submit-btn" style="padding: 10px 20px; background: #4CAF50; color: white; border: none; border-radius: 5px; cursor: pointer;">Submit</button>
-        <div id="timer" style="margin-top: 15px; font-size: 18px; color: #FF6B6B;"></div>
-    `;
+    const panel = document.createElement('div');
+    panel.className = 'kc-popup';
+    panel.setAttribute('data-test', 'text-input-panel');
+    panel.setAttribute('role', 'dialog');
+    panel.setAttribute('aria-modal', 'true');
 
-    const input = inputBox.querySelector('#text-input');
-    const submitBtn = inputBox.querySelector('#submit-btn');
-    const timerDiv = inputBox.querySelector('#timer');
-    
-    let timeLeft = timeout / 1000;
+    const heading = document.createElement('h3');
+    heading.textContent = prompt;
+    panel.appendChild(heading);
+
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.className = 'kc-input mt-3';
+    input.setAttribute('data-test', 'text-input-field');
+    input.placeholder = 'Type here…';
+    panel.appendChild(input);
+
+    const submitBtn = document.createElement('button');
+    submitBtn.className = 'kc-btn kc-btn-primary w-full mt-3';
+    submitBtn.textContent = 'Submit';
+    submitBtn.setAttribute('data-test', 'text-input-submit');
+    panel.appendChild(submitBtn);
+
+    const timerEl = document.createElement('p');
+    timerEl.className = 'kc-timer-text';
+    panel.appendChild(timerEl);
+
+    let timeLeft = Math.floor(timeout / 1000);
+    timerEl.textContent = `${timeLeft}s remaining`;
+
     const timer = setInterval(() => {
         timeLeft--;
-        timerDiv.textContent = `Time remaining: ${timeLeft}s`;
-        
+        timerEl.textContent = `${timeLeft}s remaining`;
         if (timeLeft <= 0) {
             clearInterval(timer);
             callback('');
-            document.body.removeChild(overlay);
+            if (document.body.contains(overlay)) document.body.removeChild(overlay);
         }
     }, 1000);
 
     const handleSubmit = () => {
         clearInterval(timer);
         callback(input.value);
-        document.body.removeChild(overlay);
+        if (document.body.contains(overlay)) document.body.removeChild(overlay);
     };
 
     submitBtn.onclick = handleSubmit;
-    input.addEventListener('keypress', (e) => {
-        if (e.key === 'Enter') {
-            handleSubmit();
-        }
+    input.addEventListener('keypress', e => {
+        if (e.key === 'Enter') handleSubmit();
     });
 
-    overlay.appendChild(inputBox);
+    overlay.appendChild(panel);
     document.body.appendChild(overlay);
-    
+
     input.focus();
     return overlay;
 }
 
+// ── createDrinkingPrompt ──────────────────────────────────────
+// Shows a modal prompting the named player to confirm drinking.
+export function createDrinkingPrompt(playerName, callback) {
+    const overlay = createOverlay();
+
+    const panel = document.createElement('div');
+    panel.className = 'kc-popup text-center';
+    panel.setAttribute('data-test', 'drinking-prompt');
+    panel.setAttribute('role', 'dialog');
+    panel.setAttribute('aria-modal', 'true');
+
+    const msg = document.createElement('p');
+    msg.className = 'kc-popup-title-accent';
+    msg.textContent = `${playerName}, click when you're done drinking!`;
+    panel.appendChild(msg);
+
+    const btn = document.createElement('button');
+    btn.className = 'kc-drinking-btn';
+    btn.textContent = 'Done Drinking';
+    btn.setAttribute('data-test', 'drinking-done-btn');
+    btn.onclick = () => {
+        callback();
+        if (document.body.contains(overlay)) document.body.removeChild(overlay);
+    };
+    panel.appendChild(btn);
+
+    overlay.appendChild(panel);
+    document.body.appendChild(overlay);
+
+    return overlay;
+}
+
+// ── createReactionPrompt ──────────────────────────────────────
+// Shows a popup instructing the player to move mouse to a zone.
+// Monitors mousemove on the canvas to detect if player reacted.
 export function createReactionPrompt(message, targetZone, callback) {
-    const popup = createPopup(message, 0);
-    
+    const overlay = createPopup(message, 0);
+
     let reacted = false;
     const startTime = Date.now();
-    
+
     const checkReaction = (event) => {
         if (reacted) return;
-        
-        const rect = document.querySelector('#gameCanvas').getBoundingClientRect();
+
+        const canvas = document.querySelector('#gameCanvas');
+        if (!canvas) return;
+
+        const rect = canvas.getBoundingClientRect();
         const x = event.clientX - rect.left;
         const y = event.clientY - rect.top;
-        
+
         let inZone = false;
-        if (targetZone === 'top') {
-            inZone = y < rect.height * 0.2;
-        } else if (targetZone === 'bottom') {
-            inZone = y > rect.height * 0.8;
-        }
-        
+        if (targetZone === 'top')    inZone = y < rect.height * 0.2;
+        if (targetZone === 'bottom') inZone = y > rect.height * 0.8;
+
         if (inZone) {
             reacted = true;
             const reactionTime = Date.now() - startTime;
             callback(reactionTime);
-            document.body.removeChild(popup);
+            if (document.body.contains(overlay)) document.body.removeChild(overlay);
             document.removeEventListener('mousemove', checkReaction);
         }
     };
-    
-    document.addEventListener('mousemove', checkReaction);
-    
-    return popup;
-}
 
-export function createDrinkingPrompt(playerName, callback) {
-    const popup = createPopup(`${playerName}, click when you're done drinking!`, 0, [
-        {
-            text: 'Done Drinking',
-            callback: callback
-        }
-    ]);
-    
-    return popup;
+    document.addEventListener('mousemove', checkReaction);
+    return overlay;
 }
