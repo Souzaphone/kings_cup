@@ -1,0 +1,46 @@
+[
+  {
+    "tool_name": "Read",
+    "tool_use_id": "toolu_014w8FjZTKCB7Wag1jyGX1f9",
+    "session_id": "52ef538d-3591-43ec-8e4d-22ef0b2b1d32",
+    "hook_event_name": "PostToolUseFailure",
+    "error": "",
+    "file_path": "/home/souza/kings_cup/game/static/main.js"
+  },
+  {
+    "tool_name": "Bash",
+    "tool_use_id": "toolu_01Sx7TMnoxRXLTt5Jc7vWvZu",
+    "session_id": "52ef538d-3591-43ec-8e4d-22ef0b2b1d32",
+    "hook_event_name": "PostToolUseFailure",
+    "error": "",
+    "command": "python /home/souza/kings_cup/.claude/skills/review-plan/scripts/validate_review.py /home/souza/kings_cup/plans/260415-frontend-overhaul/reviews/planning/phase-01.md 2>&1"
+  },
+  {
+    "tool_name": "Read",
+    "tool_use_id": "toolu_01VUAjoVf56S8m9TShwsqZqo",
+    "session_id": "52ef538d-3591-43ec-8e4d-22ef0b2b1d32",
+    "hook_event_name": "PostToolUseFailure",
+    "error": "",
+    "file_path": "/home/souza/kings_cup/game/static/main.js"
+  },
+  {
+    "tool_name": "Read",
+    "tool_use_id": "toolu_01LiCKSEv9HiFm3tmUWJpzFT",
+    "session_id": "52ef538d-3591-43ec-8e4d-22ef0b2b1d32",
+    "hook_event_name": "PostToolUseFailure",
+    "error": "",
+    "file_path": "/home/souza/.claude/projects/-home-souza-kings-cup/memory/MEMORY.md"
+  },
+  {
+    "tool_name": "mcp__playwright__browser_navigate",
+    "tool_use_id": "toolu_01QcaFrFih6rjwkEdS8dsdnj",
+    "session_id": "52ef538d-3591-43ec-8e4d-22ef0b2b1d32",
+    "hook_event_name": "PostToolUseFailure",
+    "error": "",
+    "mcp_server": "playwright",
+    "mcp_tool_name": "browser_navigate",
+    "input_keys": [
+      "url"
+    ]
+  }
+]

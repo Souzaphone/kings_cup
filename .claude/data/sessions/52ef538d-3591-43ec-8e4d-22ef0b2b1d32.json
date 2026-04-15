@@ -1,0 +1,9 @@
+{
+  "session_id": "52ef538d-3591-43ec-8e4d-22ef0b2b1d32",
+  "prompts": [
+    "/create-plan frontend-overhaul I want the frontend to be completely overhauled. Everything just looks very ugly and\nrudinmentary right now. Can you please help me do this?",
+    "/review-plan /home/souza/kings_cup/plans/260415-frontend-overhaul P01",
+    "/implement plans/260415-frontend-overhaul",
+    " ~/kings_cup/game | main >4 !3 ?3  npm run dev                                                        ok | 02:29:07 PM\n\n> demo@1.0.0 dev\n> nodemon app.js\n\n[nodemon] 3.1.4\n[nodemon] to restart at any time, enter `rs`\n[nodemon] watching path(s): *.*\n[nodemon] watching extensions: js,mjs,cjs,json\n[nodemon] starting `node app.js`\nnode:events:495\n      throw er; // Unhandled 'error' event\n      ^\n\nError: listen EADDRINUSE: address already in use :::5000\n    at Server.setupListenHandle [as _listen2] (node:net:1811:16)\n    at listenInCluster (node:net:1859:12)\n    at Server.listen (node:net:1947:7)\n    at file:///home/souza/kings_cup/game/app.js:502:8\n    at ModuleJob.run (node:internal/modules/esm/module_job:195:25)\n    at async ModuleLoader.import (node:internal/modules/esm/loader:336:24)\n    at async loadESM (node:internal/process/esm_loader:34:7)\n    at async handleMainPromise (node:internal/modules/run_main:106:12)\nEmitted 'error' event on Server instance at:\n    at emitErrorNT (node:net:1838:8)\n    at process.processTicksAndRejections (node:internal/process/task_queues:82:21) {\n  code: 'EADDRINUSE',\n  errno: -98,\n  syscall: 'listen',\n  address: '::',\n  port: 5000\n}\n\nNode.js v18.19.1\n[nodemon] app crashed - waiting for file changes before starting..."
+  ]
+}

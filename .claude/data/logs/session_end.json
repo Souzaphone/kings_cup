@@ -1,0 +1,8 @@
+[
+  {
+    "session_id": "52ef538d-3591-43ec-8e4d-22ef0b2b1d32",
+    "hook_event_name": "SessionEnd",
+    "reason": "prompt_input_exit",
+    "logged_at": "2026-04-15T14:32:04.464567"
+  }
+]

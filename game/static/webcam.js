@@ -124,7 +124,7 @@ class WebcamManager {
         try {
             this.localStream = await navigator.mediaDevices.getUserMedia({
                 video: { width: 640, height: 480 },
-                audio: true
+                audio: false
             });
             
             const localVideo = this.videoElements[this.playerName];

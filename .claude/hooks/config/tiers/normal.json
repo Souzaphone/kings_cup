@@ -1,0 +1,269 @@
+[
+  {
+    "_comment": "=== CATASTROPHIC (deny) — inherited from lax ==="
+  },
+  {
+    "pattern": "\\bgit\\s+push\\s+.*--force(?!-with-lease)",
+    "safe_patterns": [],
+    "action": "deny",
+    "reason": "Force push overwrites remote history — other developers' commits and in-progress work could be permanently lost. Use --force-with-lease instead."
+  },
+  {
+    "pattern": "drop\\s+database",
+    "safe_patterns": [],
+    "action": "deny",
+    "reason": "DROP DATABASE destroys the entire database including all tables, data, functions, and policies."
+  },
+  {
+    "pattern": "drop\\s+schema",
+    "safe_patterns": [],
+    "action": "deny",
+    "reason": "DROP SCHEMA destroys an entire schema and all its objects (tables, functions, policies, triggers)."
+  },
+  {
+    "pattern": "\\bsupabase\\s+db\\s+reset\\b",
+    "safe_patterns": [],
+    "action": "deny",
+    "reason": "supabase db reset destroys the entire database and all data."
+  },
+  {
+    "pattern": "\\bsupabase:(web:)?reset\\b",
+    "safe_patterns": [],
+    "action": "deny",
+    "reason": "This pnpm script wraps docker compose down -v or supabase db reset, which permanently destroys all database data and volumes."
+  },
+  {
+    "pattern": "\\bsupabase:migrate:reset\\b",
+    "safe_patterns": [],
+    "action": "deny",
+    "reason": "This pnpm script resets the database via migration scripts, destroying all data."
+  },
+  {
+    "pattern": "\\bcurl\\b.*\\|\\s*(bash|sh|zsh)",
+    "safe_patterns": [],
+    "action": "deny",
+    "reason": "Piping a URL to a shell executes arbitrary remote code. Use package managers or download and inspect scripts first."
+  },
+  {
+    "pattern": "\\bwget\\b.*\\|\\s*(bash|sh|zsh)",
+    "safe_patterns": [],
+    "action": "deny",
+    "reason": "Piping a URL to a shell executes arbitrary remote code. Use package managers or download and inspect scripts first."
+  },
+  {
+    "pattern": "\\bdropdb\\b",
+    "safe_patterns": [],
+    "action": "deny",
+    "reason": "dropdb is PostgreSQL's command-line tool to destroy an entire database."
+  },
+
+  {
+    "_comment": "=== GIT SAFETY (deny) ==="
+  },
+  {
+    "pattern": "\\bgit\\s+stash\\b",
+    "safe_patterns": ["stash\\s+list", "stash\\s+show"],
+    "action": "deny",
+    "reason": "git stash manipulates the working tree and can discard uncommitted changes. Work with the dirty tree as-is."
+  },
+  {
+    "pattern": "\\bgit\\s+checkout\\b",
+    "safe_patterns": [],
+    "action": "deny",
+    "reason": "git checkout can discard uncommitted working tree changes or switch branches unexpectedly."
+  },
+  {
+    "pattern": "\\bgit\\s+reset\\b",
+    "safe_patterns": [],
+    "action": "deny",
+    "reason": "git reset can discard commits and working tree changes."
+  },
+  {
+    "pattern": "\\bgit\\s+restore\\b",
+    "safe_patterns": [],
+    "action": "deny",
+    "reason": "git restore can discard uncommitted working tree changes."
+  },
+  {
+    "pattern": "\\bgit\\s+clean\\b",
+    "safe_patterns": [],
+    "action": "deny",
+    "reason": "git clean deletes untracked files permanently."
+  },
+  {
+    "pattern": "\\bgit\\s+merge\\b",
+    "safe_patterns": [],
+    "action": "deny",
+    "reason": "git merge can create merge commits or conflicts unexpectedly."
+  },
+  {
+    "pattern": "\\bgit\\s+rebase\\b",
+    "safe_patterns": [],
+    "action": "deny",
+    "reason": "git rebase rewrites history."
+  },
+  {
+    "pattern": "\\bgit\\s+branch\\s+-[dD]\\b",
+    "safe_patterns": [],
+    "action": "deny",
+    "reason": "Deleting branches can lose work."
+  },
+
+  {
+    "_comment": "=== GIT SAFETY (ask) ==="
+  },
+  {
+    "pattern": "\\bgit\\s+add\\s+(-A|\\.)\\s*$",
+    "safe_patterns": [],
+    "action": "ask",
+    "reason": "git add -A and git add . stage EVERYTHING including .env files, credentials, and secrets. Consider staging specific files by name instead."
+  },
+  {
+    "pattern": "\\bgit\\s+add\\s+--all\\b",
+    "safe_patterns": [],
+    "action": "ask",
+    "reason": "git add --all stages EVERYTHING including .env files, credentials, and secrets. Consider staging specific files by name instead."
+  },
+
+  {
+    "_comment": "=== SQL / DATABASE (ask) ==="
+  },
+  {
+    "pattern": "drop\\s+table",
+    "safe_patterns": [],
+    "action": "ask",
+    "reason": "DROP TABLE permanently destroys the table and all its data. Confirm this is intentional."
+  },
+  {
+    "pattern": "truncate\\s+",
+    "safe_patterns": [],
+    "action": "ask",
+    "reason": "TRUNCATE removes all rows instantly with no transaction log for recovery. Confirm this is intentional."
+  },
+  {
+    "pattern": "drop\\s+policy",
+    "safe_patterns": [],
+    "action": "ask",
+    "reason": "Dropping an RLS policy silently exposes tenant data to all authenticated users."
+  },
+  {
+    "pattern": "drop\\s+function",
+    "safe_patterns": [],
+    "action": "ask",
+    "reason": "Dropping a database function breaks server actions and RPCs that depend on it."
+  },
+  {
+    "pattern": "drop\\s+trigger",
+    "safe_patterns": [],
+    "action": "ask",
+    "reason": "Dropping a trigger removes business rule enforcement (permission validation, auto-seeding, audit logging)."
+  },
+  {
+    "pattern": "drop\\s+type",
+    "safe_patterns": [],
+    "action": "ask",
+    "reason": "Dropping an enum type breaks all tables and queries that reference it."
+  },
+  {
+    "pattern": "alter\\s+table.*drop\\s+column",
+    "safe_patterns": [],
+    "action": "ask",
+    "reason": "Dropping a column permanently destroys all data stored in it."
+  },
+  {
+    "pattern": "delete\\s+from",
+    "safe_patterns": ["where", "WHERE"],
+    "action": "ask",
+    "reason": "DELETE FROM without a WHERE clause deletes ALL rows in the table."
+  },
+
+  {
+    "_comment": "=== FILE SYSTEM (ask) ==="
+  },
+  {
+    "pattern": "\\brm\\s+(-[a-z]*r[a-z]*f|-[a-z]*f[a-z]*r|--recursive\\s+--force|--force\\s+--recursive|-r\\s+.*-f|-f\\s+.*-r)",
+    "safe_patterns": [
+      "\\.next",
+      "node_modules",
+      "\\.turbo",
+      "\\.cache",
+      "__pycache__",
+      "dist/",
+      "build/",
+      "trees/",
+      "coverage/",
+      "\\.vitest",
+      "tmp/",
+      "temp/",
+      "logs/"
+    ],
+    "action": "ask",
+    "reason": "rm -rf on an unrecognized path can permanently destroy source code or data. Verify the path is safe."
+  },
+
+  {
+    "_comment": "=== DOCKER (deny) ==="
+  },
+  {
+    "pattern": "\\bdocker\\s+volume\\s+(rm|remove|prune)\\b",
+    "safe_patterns": [],
+    "action": "deny",
+    "reason": "Docker volume removal permanently destroys database data, TLS certificates, and other persistent state."
+  },
+  {
+    "pattern": "\\bdocker\\s+system\\s+prune\\b",
+    "safe_patterns": [],
+    "action": "deny",
+    "reason": "Docker system prune can destroy volumes and container state."
+  },
+  {
+    "pattern": "\\bdocker\\s+compose\\s+down\\s+.*-v\\b",
+    "safe_patterns": [],
+    "action": "deny",
+    "reason": "The -v flag removes ALL named volumes, permanently destroying database data."
+  },
+  {
+    "pattern": "\\bdocker\\s+compose\\s+down\\s+.*--volumes\\b",
+    "safe_patterns": [],
+    "action": "deny",
+    "reason": "The --volumes flag removes ALL named volumes, permanently destroying database data."
+  },
+  {
+    "pattern": "\\bdocker\\s+container\\s+prune\\b",
+    "safe_patterns": [],
+    "action": "deny",
+    "reason": "Removes all stopped containers, which may hold important state or logs."
+  },
+
+  {
+    "_comment": "=== OTHER (deny) ==="
+  },
+  {
+    "pattern": "\\bsupabase\\s+db\\s+push\\b",
+    "safe_patterns": [],
+    "action": "deny",
+    "reason": "supabase db push applies local migrations to a REMOTE database. This can destructively modify production data."
+  },
+
+  {
+    "_comment": "=== OTHER (ask) ==="
+  },
+  {
+    "pattern": "\\bcrontab\\s+-r\\b",
+    "safe_patterns": [],
+    "action": "ask",
+    "reason": "crontab -r deletes ALL cron jobs instantly with no confirmation. Use crontab -e to edit specific entries."
+  },
+  {
+    "pattern": "\\b(npm|pnpm|yarn)\\s+publish\\b",
+    "safe_patterns": [],
+    "action": "ask",
+    "reason": "Publishing packages to a registry is visible to the world. Confirm this is intentional."
+  },
+  {
+    "pattern": ">(\\s*/etc/|\\s*~/\\.ssh/|\\s*~/\\.claude/)",
+    "safe_patterns": [],
+    "action": "ask",
+    "reason": "Redirecting output to system config, SSH, or Claude config files can overwrite critical configuration. Confirm the target path."
+  }
+]

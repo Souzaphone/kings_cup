@@ -1,0 +1,26 @@
+[
+  {
+    "session_id": "52ef538d-3591-43ec-8e4d-22ef0b2b1d32",
+    "hook_event_name": "UserPromptSubmit",
+    "prompt_length": 171,
+    "prompt_preview": "/create-plan frontend-overhaul I want the frontend to be completely overhauled. Everything just looks very ugly and\nrudi"
+  },
+  {
+    "session_id": "52ef538d-3591-43ec-8e4d-22ef0b2b1d32",
+    "hook_event_name": "UserPromptSubmit",
+    "prompt_length": 69,
+    "prompt_preview": "/review-plan /home/souza/kings_cup/plans/260415-frontend-overhaul P01"
+  },
+  {
+    "session_id": "52ef538d-3591-43ec-8e4d-22ef0b2b1d32",
+    "hook_event_name": "UserPromptSubmit",
+    "prompt_length": 41,
+    "prompt_preview": "/implement plans/260415-frontend-overhaul"
+  },
+  {
+    "session_id": "52ef538d-3591-43ec-8e4d-22ef0b2b1d32",
+    "hook_event_name": "UserPromptSubmit",
+    "prompt_length": 1268,
+    "prompt_preview": " ~/kings_cup/game | main >4 !3 ?3  npm run dev                                                        ok | 02:29:07 PM\n\n"
+  }
+]

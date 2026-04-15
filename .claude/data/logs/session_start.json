@@ -1,0 +1,23 @@
+[
+  {
+    "session_id": "52ef538d-3591-43ec-8e4d-22ef0b2b1d32",
+    "hook_event_name": "SessionStart",
+    "source": "startup",
+    "model": "claude-sonnet-4-6",
+    "agent_type": ""
+  },
+  {
+    "session_id": "52ef538d-3591-43ec-8e4d-22ef0b2b1d32",
+    "hook_event_name": "SessionStart",
+    "source": "compact",
+    "model": "claude-sonnet-4-6",
+    "agent_type": ""
+  },
+  {
+    "session_id": "52ef538d-3591-43ec-8e4d-22ef0b2b1d32",
+    "hook_event_name": "SessionStart",
+    "source": "compact",
+    "model": "claude-sonnet-4-6",
+    "agent_type": ""
+  }
+]

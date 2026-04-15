@@ -1,0 +1,56 @@
+[
+  {
+    "pattern": "\\bgit\\s+push\\s+.*--force(?!-with-lease)",
+    "safe_patterns": [],
+    "action": "deny",
+    "reason": "Force push overwrites remote history — other developers' commits and in-progress work could be permanently lost. Use --force-with-lease instead."
+  },
+  {
+    "pattern": "drop\\s+database",
+    "safe_patterns": [],
+    "action": "deny",
+    "reason": "DROP DATABASE destroys the entire database including all tables, data, functions, and policies."
+  },
+  {
+    "pattern": "drop\\s+schema",
+    "safe_patterns": [],
+    "action": "deny",
+    "reason": "DROP SCHEMA destroys an entire schema and all its objects (tables, functions, policies, triggers)."
+  },
+  {
+    "pattern": "\\bsupabase\\s+db\\s+reset\\b",
+    "safe_patterns": [],
+    "action": "deny",
+    "reason": "supabase db reset destroys the entire database and all data."
+  },
+  {
+    "pattern": "\\bsupabase:(web:)?reset\\b",
+    "safe_patterns": [],
+    "action": "deny",
+    "reason": "This pnpm script wraps docker compose down -v or supabase db reset, which permanently destroys all database data and volumes."
+  },
+  {
+    "pattern": "\\bsupabase:migrate:reset\\b",
+    "safe_patterns": [],
+    "action": "deny",
+    "reason": "This pnpm script resets the database via migration scripts, destroying all data."
+  },
+  {
+    "pattern": "\\bcurl\\b.*\\|\\s*(bash|sh|zsh)",
+    "safe_patterns": [],
+    "action": "deny",
+    "reason": "Piping a URL to a shell executes arbitrary remote code. Use package managers or download and inspect scripts first."
+  },
+  {
+    "pattern": "\\bwget\\b.*\\|\\s*(bash|sh|zsh)",
+    "safe_patterns": [],
+    "action": "deny",
+    "reason": "Piping a URL to a shell executes arbitrary remote code. Use package managers or download and inspect scripts first."
+  },
+  {
+    "pattern": "\\bdropdb\\b",
+    "safe_patterns": [],
+    "action": "deny",
+    "reason": "dropdb is PostgreSQL's command-line tool to destroy an entire database."
+  }
+]
