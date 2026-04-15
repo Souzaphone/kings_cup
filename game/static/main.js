@@ -407,29 +407,29 @@ function loadPublicGames() {
     const loadingDiv = document.getElementById('games-loading');
     const noGamesDiv = document.getElementById('no-games');
     
-    loadingDiv.style.display = 'block';
-    noGamesDiv.style.display = 'none';
+    loadingDiv.classList.remove('kc-hidden');
+    noGamesDiv.classList.add('kc-hidden');
     gamesContainer.innerHTML = '';
-    
+
     fetch('/public_games')
         .then(response => response.json())
         .then(data => {
-            loadingDiv.style.display = 'none';
-            
+            loadingDiv.classList.add('kc-hidden');
+
             if (data.success && data.games.length > 0) {
                 data.games.forEach(game => {
                     const gameElement = createGameElement(game);
                     gamesContainer.appendChild(gameElement);
                 });
             } else {
-                noGamesDiv.style.display = 'block';
+                noGamesDiv.classList.remove('kc-hidden');
             }
         })
         .catch(error => {
             console.error('Error loading public games:', error);
-            loadingDiv.style.display = 'none';
+            loadingDiv.classList.add('kc-hidden');
             noGamesDiv.textContent = 'Failed to load games';
-            noGamesDiv.style.display = 'block';
+            noGamesDiv.classList.remove('kc-hidden');
         });
 }
 
@@ -444,14 +444,15 @@ function createGameElement(game) {
         <div class="game-info">
             <div><strong>Host:</strong> ${game.hostName || 'Unknown'}</div>
             <div class="game-meta">
-                Players: ${game.playerCount}/${game.maxPlayers} | 
-                ${game.hasPassword ? '🔒 Private' : '🌐 Public'} | 
+                Players: ${game.playerCount}/${game.maxPlayers} |
+                ${game.hasPassword ? '🔒 Private' : '🌐 Public'} |
                 Last activity: ${timeSince}
             </div>
         </div>
-        <button onclick="event.stopPropagation(); joinPublicGame('${game.id}', ${game.hasPassword})">
-            Join
-        </button>
+        <button
+            class="kc-btn kc-btn-ghost text-xs px-2 py-1"
+            onclick="event.stopPropagation(); joinPublicGame('${game.id}', ${game.hasPassword})"
+        >Join</button>
     `;
     
     return gameDiv;
@@ -474,14 +475,14 @@ function joinPublicGame(publicGameId, hasPassword) {
 }
 
 function showPasswordModal(targetGameId) {
-    document.getElementById('password-modal').style.display = 'block';
+    document.getElementById('password-modal').classList.remove('kc-hidden');
     document.getElementById('modal-password').value = '';
     document.getElementById('modal-password').focus();
     window.currentGameId = targetGameId;
 }
 
 function hidePasswordModal() {
-    document.getElementById('password-modal').style.display = 'none';
+    document.getElementById('password-modal').classList.add('kc-hidden');
 }
 
 function handlePasswordSubmit() {
@@ -498,7 +499,11 @@ function handlePasswordSubmit() {
 
 function handleGameTypeChange() {
     const isPrivate = document.querySelector('input[name="game-type"]:checked').value === 'private';
-    document.getElementById('password-section').style.display = isPrivate ? 'block' : 'none';
+    if (isPrivate) {
+        document.getElementById('password-section').classList.remove('kc-hidden');
+    } else {
+        document.getElementById('password-section').classList.add('kc-hidden');
+    }
 }
 
 function getTimeSince(date) {

@@ -1,100 +1,155 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Kings Cup</title>
-    <!-- Tailwind CDN -->
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script>
-      tailwind.config = {
-        theme: {
-          extend: {
-            colors: {
-              'kc-accent': '#3b82f6',
-              'kc-bg':     '#f8fafc',
-              'kc-surface':'#ffffff',
-              'kc-text':   '#0f172a',
-              'kc-muted':  '#64748b',
-              'kc-border': '#e2e8f0',
-              'kc-danger': '#ef4444',
-              'kc-success':'#22c55e',
-            },
-            borderRadius: {
-              'kc': '0.75rem',
-            }
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Kings Cup</title>
+  <!-- Tailwind CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            'kc-accent': '#3b82f6',
+            'kc-bg':     '#f8fafc',
+            'kc-surface':'#ffffff',
+            'kc-text':   '#0f172a',
+            'kc-muted':  '#64748b',
+            'kc-border': '#e2e8f0',
+            'kc-danger': '#ef4444',
+            'kc-success':'#22c55e',
+          },
+          borderRadius: {
+            'kc': '0.75rem',
           }
         }
       }
-    </script>
-    <link rel="stylesheet" href="/static/style.css">
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
+    }
+  </script>
+  <link rel="stylesheet" href="/static/style.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
 </head>
-<body>
-    <div class="wrapper">
-        <img src="/static/assets/beer.png" alt="beer">
-        <h2>Kings Cup</h2>
-        
-        <!-- Player Name Input -->
-        <div class="player-section">
-            <label for="player-name">Player Name</label>
-            <input type="text" id="player-name" placeholder="Enter your name">
-        </div>
+<body class="min-h-screen bg-kc-bg flex flex-col items-center justify-center py-10 px-4">
 
-        <!-- Create Game Section -->
-        <div class="create-section">
-            <h3>Create New Game</h3>
-            <div class="game-options">
-                <label>
-                    <input type="radio" name="game-type" value="public" checked> Public Game
-                </label>
-                <label>
-                    <input type="radio" name="game-type" value="private"> Private Game
-                </label>
-            </div>
-            <div id="password-section" style="display: none;">
-                <label for="game-password">Password</label>
-                <input type="password" id="game-password" placeholder="Enter password">
-            </div>
-            <button type="button" id="create-game-btn" disabled>Create Game</button>
-        </div>
+  <!-- Page Header -->
+  <div class="mb-8 text-center">
+    <span class="text-5xl select-none">♠</span>
+    <h1 class="text-3xl font-bold text-kc-text mt-2 tracking-tight">Kings Cup</h1>
+    <p class="text-kc-muted text-sm mt-1">Draw cards. Follow rules. Survive.</p>
+  </div>
 
-        <!-- Public Games List -->
-        <div class="lobby-section">
-            <h3>Public Games</h3>
-            <button type="button" id="refresh-games-btn">Refresh</button>
-            <div id="public-games-container">
-                <div id="games-loading">Loading games...</div>
-                <div id="no-games" style="display: none;">No public games available</div>
-                <div id="games-list"></div>
-            </div>
-        </div>
+  <!-- Main content column -->
+  <div class="w-full max-w-md flex flex-col gap-4">
 
-        <!-- Manual Join Section -->
-        <div class="join-section">
-            <h3>Join by Game ID</h3>
-            <label for="game-id">Game ID</label>
-            <input type="text" id="game-id" placeholder="Enter game ID">
-            <div id="manual-password-section" style="display: none;">
-                <label for="join-password">Password</label>
-                <input type="password" id="join-password" placeholder="Enter password">
-            </div>
-            <button type="button" id="join-game-btn" disabled>Join Game</button>
-        </div>
+    <!-- Player Name -->
+    <div class="kc-surface">
+      <label class="kc-label" for="player-name">Your Name</label>
+      <input
+        type="text"
+        id="player-name"
+        class="kc-input"
+        placeholder="Enter your name"
+        autocomplete="off"
+        maxlength="24"
+        data-test="player-name-input"
+      >
     </div>
 
-    <!-- Password Modal -->
-    <div id="password-modal" class="modal" style="display: none;">
-        <div class="modal-content">
-            <h3>Enter Password</h3>
-            <input type="password" id="modal-password" placeholder="Enter game password">
-            <div class="modal-buttons">
-                <button id="password-submit">Join</button>
-                <button id="password-cancel">Cancel</button>
-            </div>
-        </div>
+    <!-- Create Game -->
+    <div class="kc-surface">
+      <h2 class="text-base font-semibold text-kc-text mb-3">Create a Game</h2>
+
+      <div class="flex gap-4 mb-3">
+        <label class="flex items-center gap-2 cursor-pointer select-none text-sm text-kc-text font-medium">
+          <input type="radio" name="game-type" value="public" checked class="accent-kc-accent">
+          Public
+        </label>
+        <label class="flex items-center gap-2 cursor-pointer select-none text-sm text-kc-text font-medium">
+          <input type="radio" name="game-type" value="private" class="accent-kc-accent">
+          Private
+        </label>
+      </div>
+
+      <div id="password-section" class="mb-3 kc-hidden">
+        <label class="kc-label" for="game-password">Password</label>
+        <input type="password" id="game-password" class="kc-input" placeholder="Set a password">
+      </div>
+
+      <button
+        type="button"
+        id="create-game-btn"
+        class="kc-btn kc-btn-primary w-full"
+        disabled
+        data-test="create-game-btn"
+      >
+        Create Game
+      </button>
     </div>
 
-    <script type="module" src="/static/main.js"></script>
+    <!-- Public Games -->
+    <div class="kc-surface">
+      <div class="flex items-center justify-between mb-3">
+        <h2 class="text-base font-semibold text-kc-text">Public Games</h2>
+        <button
+          type="button"
+          id="refresh-games-btn"
+          class="kc-btn kc-btn-ghost text-xs px-2 py-1"
+          data-test="refresh-games-btn"
+        >
+          Refresh
+        </button>
+      </div>
+
+      <div id="public-games-container" class="max-h-56 overflow-y-auto flex flex-col gap-2">
+        <p id="games-loading" class="text-kc-muted text-sm text-center py-4">Loading games…</p>
+        <p id="no-games" class="text-kc-muted text-sm text-center py-4 kc-hidden">No public games available</p>
+        <div id="games-list" class="flex flex-col gap-2"></div>
+      </div>
+    </div>
+
+    <!-- Join by ID -->
+    <div class="kc-surface">
+      <h2 class="text-base font-semibold text-kc-text mb-3">Join by Game ID</h2>
+
+      <label class="kc-label" for="game-id">Game ID</label>
+      <input type="text" id="game-id" class="kc-input mb-3" placeholder="Paste game ID here" autocomplete="off">
+
+      <div id="manual-password-section" class="mb-3 kc-hidden">
+        <label class="kc-label" for="join-password">Password</label>
+        <input type="password" id="join-password" class="kc-input" placeholder="Enter password">
+      </div>
+
+      <button
+        type="button"
+        id="join-game-btn"
+        class="kc-btn kc-btn-primary w-full"
+        disabled
+        data-test="join-game-btn"
+      >
+        Join Game
+      </button>
+    </div>
+
+  </div><!-- /main column -->
+
+  <!-- Password Modal (for clicking a private game in the list) -->
+  <div id="password-modal" class="kc-overlay kc-hidden">
+    <div class="kc-popup">
+      <h3>Enter Password</h3>
+      <input
+        type="password"
+        id="modal-password"
+        class="kc-input mt-3 mb-4"
+        placeholder="Game password"
+      >
+      <div class="flex gap-2 justify-end">
+        <button id="password-cancel" class="kc-btn kc-btn-ghost">Cancel</button>
+        <button id="password-submit" class="kc-btn kc-btn-primary">Join</button>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="/static/main.js"></script>
 </body>
 </html>

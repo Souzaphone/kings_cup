@@ -265,6 +265,42 @@ html, body {
   margin-bottom: 0.75rem;
 }
 
+/* Public game list item (rendered by main.js loadPublicGames) */
+.game-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--kc-border);
+  border-radius: var(--kc-radius-sm);
+  background: var(--kc-bg);
+  cursor: pointer;
+  transition: background 0.12s, border-color 0.12s;
+  font-size: 0.9rem;
+}
+
+.game-item:hover {
+  background: #eff6ff;
+  border-color: var(--kc-accent);
+}
+
+.game-info {
+  flex: 1;
+  font-weight: 500;
+  color: var(--kc-text);
+}
+
+.game-meta {
+  font-size: 0.8rem;
+  color: var(--kc-muted);
+  margin-top: 0.15rem;
+}
+
+.game-item .kc-btn {
+  flex-shrink: 0;
+  margin-left: 0.5rem;
+}
+
 /* Utility: hidden */
 .kc-hidden { display: none !important; }
 

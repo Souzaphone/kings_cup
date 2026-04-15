@@ -48,7 +48,7 @@ Pattern: `phase-NN-descriptive-slug.md`
 | Phase  | Title                                              | Group               | Focus                          | Status  |
 | :----- | :------------------------------------------------- | :------------------ | :----------------------------- | :------ |
 | **01** | [Design Foundation](./phase-01-design-foundation.md) | frontend-overhaul | Tailwind CDN, tokens, style.css | Done |
-| **02** | [Lobby Redesign](./phase-02-lobby-redesign.md)     | frontend-overhaul   | index.html full restyle        | Pending |
+| **02** | [Lobby Redesign](./phase-02-lobby-redesign.md)     | frontend-overhaul   | index.html full restyle        | Done |
 | **03** | [Game Page Layout](./phase-03-game-page-layout.md) | frontend-overhaul   | game.html header & controls    | Pending |
 | **04** | [UI Overlays & Components](./phase-04-ui-overlays.md) | frontend-overhaul | Popups, modals, toasts, loading | Pending |
 
