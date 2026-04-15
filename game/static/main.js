@@ -176,10 +176,10 @@ function setupCursorCanvas() {
     cursorCanvas = document.createElement('canvas');
     cursorCanvas.width = canvas.width;
     cursorCanvas.height = canvas.height;
-    cursorCanvas.style.position = 'absolute';
-    cursorCanvas.style.left = canvas.offsetLeft + 'px';
-    cursorCanvas.style.top = canvas.offsetTop + 'px';
-    cursorCanvas.style.pointerEvents = 'none'; // Allow clicks to pass through
+    cursorCanvas.style.position = 'fixed';
+    cursorCanvas.style.top = '56px';
+    cursorCanvas.style.left = '0';
+    cursorCanvas.style.pointerEvents = 'none';
     document.body.appendChild(cursorCanvas);
     cursorCtx = cursorCanvas.getContext('2d');
 }
@@ -326,16 +326,29 @@ function joinGame(password = null) {
     }
 }
 
+function renderPlayerList(playerList) {
+    const container = document.getElementById('player-list');
+    if (!container) return;
+    container.innerHTML = '';
+    playerList.forEach(name => {
+        const pill = document.createElement('span');
+        pill.className = 'kc-player-pill' + (name === client ? ' is-current' : '');
+        pill.textContent = name;
+        container.appendChild(pill);
+    });
+}
+
 function updateGameState(game) {
     players = game.players;
 
     console.log(`players: ${players}`);
 
     targetAmount = game.target_amount;
-    
+    renderPlayerList(players);
+
     // Update card events with new players list
     initializeCardEvents(socket, gameId, players, client);
-    
+
     drawTable();
 }
 
@@ -359,23 +372,24 @@ function handleJoinGameClick() {
 
 function handlePlayerLeft(data) {
     players = data.players;
-    
+    renderPlayerList(players);
+
     // Update card events with new players list
     initializeCardEvents(socket, gameId, players, client);
-    
+
     updateStartButtonState();
     drawTable();
 }
 
 function handlePlayerJoined(data) {
-
     console.log(`Inside of handlePlayerJoined`);
 
     players = data.players;
-    
+    renderPlayerList(players);
+
     // Update card events with new players list
     initializeCardEvents(socket, gameId, players, client);
-    
+
     updateStartButtonState();
     drawTable();
 }
@@ -569,21 +583,17 @@ async function initializeDeck() {
 }
 
 function resizeCanvas() {
-    // Set canvas size to full window size
-    const header = document.querySelector('.header');
-    const headerHeight = header.offsetHeight;
-    
+    const HEADER_HEIGHT = 56;
     canvas.width = window.innerWidth;
-    canvas.height = window.innerHeight;
+    canvas.height = window.innerHeight - HEADER_HEIGHT;
 
-    // Adjust canvas style to cover the whole screen
-    canvas.style.position = 'fixed';
-    canvas.style.top = `${headerHeight}px`;
-    canvas.style.left = '0';
-    canvas.style.width = '100%';
-    canvas.style.height = '100%';
+    if (cursorCanvas) {
+        cursorCanvas.width = canvas.width;
+        cursorCanvas.height = canvas.height;
+        cursorCanvas.style.top = HEADER_HEIGHT + 'px';
+    }
 
-    //Recalculate card positions
+    // Recalculate card positions to fit new canvas dimensions
     if (cards.length > 0) {
         const centerX = canvas.width / 2;
         const centerY = canvas.height / 2;
@@ -591,18 +601,12 @@ function resizeCanvas() {
             if (card.revealed) {
                 card.x = centerX;
                 card.y = centerY;
-            }
-            else {
+            } else {
                 card.x = centerX + Math.cos(card.id * (2 * Math.PI / 52)) * 150;
                 card.y = centerY + Math.sin(card.id * (2 * Math.PI / 52)) * 150;
             }
         });
     }
-
-    cursorCanvas.width = canvas.width;
-    cursorCanvas.height = canvas.height;
-    cursorCanvas.style.left = canvas.offsetLeft + 'px';
-    cursorCanvas.style.top = canvas.offsetTop + 'px';
 
     drawTable();
 }
@@ -677,45 +681,6 @@ function drawTable() {
 
     // Draw cards
     drawCards();
-
-    // Draw player information
-    ctx.fillStyle = '#FFFFFF';
-    ctx.font = '20px Arial';
-    ctx.fillText(`Current Player: ${players[currentPlayerIndex] || 'Waiting for players...'}`, 20, 30);
-
-    const copyBtn = document.getElementById('copy-game-id-btn');
-    const copyStatus = document.getElementById('copy-status');
-    
-    // Set positions relative to the canvas or other UI elements if necessary
-    copyBtn.style.position = 'absolute';
-    copyBtn.style.top = `${canvas.offsetTop + 80}px`; // Adjust to desired position
-    copyBtn.style.left = `${canvas.offsetLeft + 20}px`;
-
-    copyStatus.style.position = 'absolute';
-    copyStatus.style.top = `${canvas.offsetTop + 110}px`; // Adjust to desired position
-    copyStatus.style.left = `${canvas.offsetLeft + 20}px`;
-
-    // Draw player board
-    const boardWidth = 200;
-    const boardHeight = 300;
-    const boardX = canvas.width - boardWidth - 20;
-    const boardY = 20;
-
-    ctx.fillStyle = '#333333'; 
-    ctx.fillRect(boardX, boardY, boardWidth, boardHeight);
-
-    ctx.strokeStyle = '#FFFFFF'; 
-    ctx.lineWidth = 2;
-    ctx.strokeRect(boardX, boardY, boardWidth, boardHeight);
-
-    ctx.fillStyle = '#FFFFFF';
-    ctx.font = '16px Arial';
-
-    ctx.fillText('Players:', boardX + 10, boardY + 20);
-
-    players.forEach((player, index) => {
-        ctx.fillText(player, boardX + 10, boardY + 40 + (index * 20));
-    });
 
 }
 
@@ -1071,20 +1036,14 @@ function animatePulse() {
 
 // Copy game ID to clipboard
 function copyGameId() {
-
     console.log(`inside of copy. Game ID ${gameId}`);
-
-    if (gameId) {
-        console.log(`gameid exists`);
-        navigator.clipboard.writeText(gameId).then(() => {
-            // Show feedback message
-            const copyStatus = document.getElementById('copy-status');
-            copyStatus.style.display = 'block';
-            setTimeout(() => copyStatus.style.display = 'none', 2000); // Hide after 2 seconds
-        }).catch(err => {
-            console.error('Failed to copy game ID:', err);
-        });
-    }
+    navigator.clipboard.writeText(gameId).then(() => {
+        const el = document.getElementById('copy-status');
+        el.classList.remove('kc-hidden');
+        setTimeout(() => el.classList.add('kc-hidden'), 1500);
+    }).catch(err => {
+        console.error('Failed to copy game ID:', err);
+    });
 }
 
 function handleReset(data) {
